@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Optional, Union, Any
+from typing import Optional
 
 class ConvexFunction:
     """
@@ -21,24 +21,23 @@ class ConvexFunction:
                   A : Optional[np.ndarray] = None, 
                   b : Optional[np.ndarray] = None, 
                   c : Optional[float] = None,
-                  random_seed : Optional[int] = None,
+                  random_state : Optional[int] = None,
                   max_absolute_value : float = 100.0,
                   tol: float = 1e-10) -> None:
         
-        self.in_features = in_features
-        self.tol = tol
+        self._in_features = in_features
+        self._tol = tol
+        self._max_absolute_value = max_absolute_value
 
-        if random_seed is not None:
+        if random_state is not None:
             if A is not None or b is not None or c is not None:
                 raise ValueError("Cannot use random generation and attribute definition at the same time.")
 
-            self.max_absolute_value = max_absolute_value
-
-            rng = np.random.RandomState(random_seed)
+            rng = np.random.RandomState(random_state)
 
             self._A = ConvexFunction.generate_matrix(self.in_features, rng, self.max_absolute_value)
-            self._b = self.max_absolute_value * (2 * rng.rand(self.in_features) - 1)
-            self._c = float(self.max_absolute_value * (2 * rng.rand() - 1))
+            self._b = self.max_absolute_value * rng.uniform(-1, 1, size=in_features)
+            self._c = float(self.max_absolute_value * rng.uniform(-1, 1))
         elif A is not None and b is not None and c is not None:
             if max_absolute_value != 1000.0:
                 raise ValueError("Cannot use random generation and attribute definition at the same time.")
@@ -61,9 +60,12 @@ class ConvexFunction:
             if not isinstance(c, (int, float, np.number)):
                 raise ValueError("Last attribute must be a scalar number")
 
+            self._max_absolute_value = np.linalg.norm(self.A, 'fro')
             self._A = A
             self._b = b
             self._c = c
+        else:
+            raise ValueError("Constructor attributes is incorrect.")
 
     @staticmethod
     def generate_matrix(in_features: int, rng, max_absolute_value):
@@ -75,7 +77,7 @@ class ConvexFunction:
         """
         
         #T = (rng.rand(in_features, in_features) + 1j * rng.rand(in_features, in_features))
-        T = 2 * rng.rand(in_features, in_features) - 1
+        T = rng.uniform(-1, 1, size=(in_features, in_features))
 
         A = T @ T.conj().T + np.eye(in_features)
 
@@ -105,5 +107,14 @@ class ConvexFunction:
     def c(self):
         return self._c
 
+    @property
+    def in_features(self):
+        return self._in_features
     
-
+    @property
+    def max_absolute_value(self):
+        return self._max_absolute_value
+    
+    @property
+    def tol(self):
+        return self._tol
