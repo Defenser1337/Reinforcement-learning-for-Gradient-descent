@@ -12,9 +12,3 @@ if __name__ == "__main__":
     function1 = ConvexFunction(in_features, random_state=42, max_absolute_value=max_absolute_value)
 
     gd_result = gradient_descent(function1, random_state=42)
-
-
-   
-
-        
-    

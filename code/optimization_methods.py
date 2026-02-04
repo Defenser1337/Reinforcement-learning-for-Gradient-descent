@@ -70,7 +70,3 @@ def gradient_descent(function : ConvexFunction,
         iteration_count=iteration_count,
         status=status
     )
-
-     
-
-
