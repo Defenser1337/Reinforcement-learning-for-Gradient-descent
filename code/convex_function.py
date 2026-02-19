@@ -35,13 +35,18 @@ class ConvexFunction:
 
             rng = np.random.RandomState(random_state)
 
+            # Now we store x_opt value so that the function is positive
+            self._x_opt = self.max_absolute_value * rng.uniform(-1, 1, size=in_features)
+
+            # f(x) = (x_opt - x).T * A * (x_opt - x) + eps
+
             self._A = ConvexFunction.generate_matrix(self.in_features, rng, self.max_absolute_value)
-            self._b = self.max_absolute_value * rng.uniform(-1, 1, size=in_features)
-            self._c = float(self.max_absolute_value * rng.uniform(-1, 1))
+            self._b = -2 * self._x_opt.T @ self._A
+            self._c = float(self._x_opt.T @ self._A @ self._x_opt + 1e-9) #(self.max_absolute_value * rng.uniform(-1, 1)
         elif A is not None and b is not None and c is not None:
             if max_absolute_value != 1000.0:
                 raise ValueError("Cannot use random generation and attribute definition at the same time.")
-            
+            in_features
             if A.ndim != 2 or A.shape[0] != self.in_features or A.shape[1] != self.in_features:
                 raise ValueError("Matrix dimensions is incorrect.")
             
