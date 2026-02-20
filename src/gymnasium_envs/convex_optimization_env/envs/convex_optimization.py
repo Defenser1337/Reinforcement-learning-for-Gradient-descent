@@ -5,10 +5,11 @@ from typing import Optional
 from src.optimization.convex_function import ConvexFunction
 
 class ConvexOptimization(gym.Env):
-    metadata = {"render_modes": []}
+    metadata = {"render_modes": ["ansi"]}
 
-    def __init__(self, in_features : int = 1, max_absolute_value : np.float32 = 100.0):
+    def __init__(self, in_features : int = 1, render_mode = None, max_absolute_value : np.float32 = 1.0):
         # The count of function in_features 
+        self.render_mode = render_mode
         self.in_features = in_features
         self.tol = 0.001
 
@@ -20,13 +21,9 @@ class ConvexOptimization(gym.Env):
 
         self._function = None
 
-        self.observation_space = spaces.Dict(
-            {
-                "grad_norm" : spaces.Box(low=0.0, high=np.inf, shape=(1,), dtype=np.float32), 
-                #"gradient_mean_EMA" : spaces.Box(low=1e-10, high=1e10, shape=(1,), dtype=np.float32),    
-                #"gradient_var_EMA" : spaces.Box(low=1e-10, high=1e10, shape=(1,), dtype=np.float32),       
-            }
-        )
+        self.observation_space = spaces.Dict({
+            "grad_norm" : spaces.Box(low=0.0, high=1000.0, shape=(1,), dtype=np.float32)  
+        })
 
         self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32)
 
@@ -67,9 +64,9 @@ class ConvexOptimization(gym.Env):
         return observation, info
 
     def step(self, action : np.ndarray):
-        lr = 10**(action[0] * 5 - 2)
-
         self._iteration += 1
+
+        lr = 10**(action[0] * 3 - 2)
 
         prev_x = self._x.copy()
         prev_grad = self._grad.copy()
@@ -80,17 +77,22 @@ class ConvexOptimization(gym.Env):
         self._grad = self._function.get_gradient(self._x)
         self._function_value = self._function(self._x)
 
-        norm_val = np.linalg.norm(self._grad)
-        self._grad_norm = np.array([np.clip(norm_val, 0, 1e10)], dtype=np.float32)
-
         grad_delta_norm = np.linalg.norm(self._grad - prev_grad)
+
+        val = np.linalg.norm(self._grad)
+        safe_norm = np.array([np.clip(val, 0, 1000.0)], dtype=np.float32)
+
+        if not (np.isfinite(self._function_value) and np.all(np.isfinite(self._grad))):
+            return safe_norm, -10.0, True, False, {"msg": "diverged"}
+
+        eps = 1e-12
+        reward = float(np.log2(prev_function_value + eps) - np.log2(self._function_value + eps))
+        reward = np.clip(reward, -5.0, 5.0)
 
         truncated = bool(self._iteration > 5000)
         terminated = bool((self._grad_norm / (prev_grad_norm + 1e-12) > 1e6) 
                           or (self._grad_norm < self.tol)
                           or (not np.isfinite(self._grad_norm[0])))
-
-        reward = np.log2(prev_function_value / (self._function_value + 1e-12))
 
         observation = {
             "grad_norm": self._grad_norm
@@ -106,7 +108,15 @@ class ConvexOptimization(gym.Env):
         return observation, reward, terminated, truncated, info
     
     def render(self):
-        pass
+        if self.render_mode == "ansi":
+            render_string = (
+                f"\n--- Iteration {self._iteration} ---\n"
+                f"Function Value: {self._function_value:.6f}\n"
+                f"Gradient Norm:  {np.linalg.norm(self._grad):.6f}\n"
+                f"Current x:      {self._x}\n"
+            )
+            
+            return render_string
 
     def close(self):
         pass
