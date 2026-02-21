@@ -65,6 +65,7 @@ class ConvexOptimization(gym.Env):
                                         max_absolute_value=self.max_absolute_value)
         
         self._x = self.np_random.uniform(low = -self.max_absolute_value, high=self.max_absolute_value, size=(self.in_features,))
+        self._x0 = self._x.copy()
         self._grad = self._function.get_gradient(self._x)
         self._function_value = self._function(self._x)
         self._grad_delta_norm = -np.inf
@@ -146,9 +147,16 @@ class ConvexOptimization(gym.Env):
                 f"\n--- Iteration {self._iteration} ---\n"
                 f"Function Value: {self._function_value:.6f}\n"
                 f"Gradient Norm:  {np.linalg.norm(self._grad):.6f}\n"
-                f"Current x:      {self._x}\n"
+                f"A: {self._function.A}\n"
+                f"b: {self._function.b}\n"
+                f"c: {self._function.c}\n"
+                f"X start: {self._x0}\n"
+                f"X best: {self._x}\n"
             )
             return render_string
 
     def close(self):
         pass
+
+    def get_x_start(self):
+        return self._x0.copy()
