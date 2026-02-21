@@ -31,7 +31,8 @@ def gradient_descent_optimizer(function : ConvexFunction,
 
     x = prev_x
     iteration_count = -1
-    status = -1 #initial state - max iteration reached
+    # Initial state: max iteration reached
+    status = -1
 
     print("Gradient Descent Optimization")
 
@@ -43,12 +44,12 @@ def gradient_descent_optimizer(function : ConvexFunction,
         norm = np.linalg.norm(grad)
         delta_norm = np.linalg.norm(grad - prev_grad)
 
-        if norm/prev_norm > 1e4:
+        if norm/prev_norm > 1e6:
             iteration_count = i
             status = 0
             break
 
-        if delta_norm < tol:
+        if norm < tol:
             iteration_count = i 
             status = 1
             break
@@ -115,7 +116,8 @@ def adam_optimizer(function : ConvexFunction,
 
     x = prev_x
     iteration_count = -1
-    status = -1 #initial state - max iteration reached
+    # Initial state: max iteration reached
+    status = -1 
 
     print("Adam Optimization")
 
@@ -133,7 +135,7 @@ def adam_optimizer(function : ConvexFunction,
         norm = np.linalg.norm(grad)
         delta_norm = np.linalg.norm(grad - prev_grad)
 
-        if norm/prev_norm > 1e4:
+        if norm/prev_norm > 1e6:
             iteration_count = i 
             status = 0
             break
