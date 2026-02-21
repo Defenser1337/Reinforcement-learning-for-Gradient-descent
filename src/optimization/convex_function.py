@@ -42,13 +42,13 @@ class ConvexFunction:
             
             self._A = ConvexFunction.generate_matrix(self.in_features, rng, self.max_absolute_value)
             self._b = -2 * self._x_opt.T @ self._A
-            self._c = float(self._x_opt.T @ self._A @ self._x_opt + self.eps)
+            self._c = float(self._x_opt.T @ self._A @ self._x_opt + self.eps + self.max_absolute_value * rng.uniform(0, 1))
         elif A is not None and b is not None and c is not None:
             if max_absolute_value != 1.0:
-                raise ValueError("Cannot use random generation and attribute definition at the same time.")
+                raise ValueError("Cannot use random generation and attribute definition at the same time")
             
             if A.ndim != 2 or A.shape[0] != self.in_features or A.shape[1] != self.in_features:
-                raise ValueError("Matrix dimensions is incorrect.")
+                raise ValueError("Matrix dimensions is incorrect")
             
             if not np.iscomplexobj(A):
                 A = A.astype(np.complex128, copy=False)
@@ -60,7 +60,7 @@ class ConvexFunction:
                 raise ValueError("Matrix should be positive-definite and symmetric")
             
             if b.ndim != 1 or b.shape[0] != self.in_features:
-                raise ValueError("Vector dimensions is incorrect.")
+                raise ValueError("Vector dimensions is incorrect")
             
             if not isinstance(c, (int, float, np.number)):
                 raise ValueError("Last attribute must be a scalar number")
@@ -89,12 +89,12 @@ class ConvexFunction:
     
     def __call__(self, x : np.ndarray):
         if x.ndim != 1 or x.shape[0] != self.in_features:
-                raise ValueError("Vector dimension is incorrect.")
+                raise ValueError("Vector dimension is incorrect")
         return float(x.T @ self._A @ x + self._b @ x + self._c)
     
     def get_gradient(self, x : np.ndarray):
         if x.ndim != 1 or x.shape[0] != self.in_features:
-                raise ValueError("Vector dimension is incorrect.")
+                raise ValueError("Vector dimension is incorrect")
         return 2 * self._A @ x + self._b
     
     @property

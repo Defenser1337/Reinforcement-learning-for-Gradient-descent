@@ -1,6 +1,6 @@
 import numpy as np
-from typing import NamedTuple
-from convex_function import ConvexFunction
+from typing import NamedTuple, Optional
+from src.optimization.convex_function import ConvexFunction
 
 class OptimizeResult(NamedTuple):
     x: np.ndarray
@@ -8,18 +8,28 @@ class OptimizeResult(NamedTuple):
     iteration_count: int  
     status: int # -1 - max iteration reached, 0 - gradient exploded, 1 - gradient converged
 
-def gradient_descent_optimizer(function : ConvexFunction, 
-                            lr : float = 0.001, 
-                            tol : float = 0.001, 
-                            max_iteration_count : int = 10000,
-                            random_state : int = None,
-                            display_result : bool = False) -> OptimizeResult:
-    rng = np.random.RandomState(random_state)
-
+def gradient_descent_optimizer(function : ConvexFunction,
+                               x0 : Optional[np.ndarray] = None, 
+                               lr : float = 0.001, 
+                               tol : float = 0.001, 
+                               max_iteration_count : int = 10000,
+                               random_state : Optional[int] = None,
+                               display_result : bool = False) -> OptimizeResult:
+    
     in_features = function.in_features
     max_absolute_value = function.max_absolute_value
 
-    prev_x = max_absolute_value * rng.uniform(-1, 1, size = in_features)
+    if x0 is None and random_state is not None:
+        rng = np.random.RandomState(random_state)
+        x0 = max_absolute_value * rng.uniform(-1, 1, size = in_features)
+        prev_x = x0.copy()
+    elif x0 is not None and random_state is None:
+        if x0.ndim != 1 or x0.shape[0] != in_features:
+            raise ValueError("Vector dimension is incorrect")
+        prev_x = x0.copy()
+    else:
+        raise ValueError("Arguments are incompatible")
+
     prev_grad = function.get_gradient(prev_x)
     prev_norm = np.linalg.norm(prev_grad)
 
@@ -80,6 +90,7 @@ def gradient_descent_optimizer(function : ConvexFunction,
 
     print(f"Best result on {best_iteration_count}th iteration")
     print(f"Function value : {best_function_value:.4f} | Gradient norm : {best_norm:.4f} | Gradient delta norm : {best_delta_norm:.4f}")
+    print(f"X start : {x0} | X best : {best_x}")
     print(100 * "-")
 
     return OptimizeResult(
@@ -89,20 +100,30 @@ def gradient_descent_optimizer(function : ConvexFunction,
         status=status
     )
 
-def adam_optimizer(function : ConvexFunction, 
+def adam_optimizer(function : ConvexFunction,
+                    x0 : Optional[np.ndarray] = None, 
                     lr : float = 0.001, 
                     tol : float = 0.001, 
                     max_iteration_count : int = 10000,
                     beta1 : float = 0.99,
                     beta2 : float = 0.999,
                     eps : float = 1e-8,
-                    random_state : int = None,
+                    random_state : Optional[int] = None,
                     display_result : bool = False) -> OptimizeResult:
-    rng = np.random.RandomState(random_state)
     in_features = function.in_features
     max_absolute_value = function.max_absolute_value
 
-    prev_x = max_absolute_value * rng.uniform(-1, 1, size = in_features)
+    if x0 is None and random_state is not None:
+        rng = np.random.RandomState(random_state)
+        x0 = max_absolute_value * rng.uniform(-1, 1, size = in_features)
+        prev_x = x0.copy()
+    elif x0 is not None and random_state is None:
+        if x0.ndim != 1 or x0.shape[0] != in_features:
+            raise ValueError("Vector dimension is incorrect")
+        prev_x = x0.copy()
+    else:
+        raise ValueError("Arguments are incompatible")
+
     prev_grad = function.get_gradient(x=prev_x)
     prev_norm = np.linalg.norm(prev_grad)
     prev_mean = np.zeros(in_features)
@@ -145,7 +166,7 @@ def adam_optimizer(function : ConvexFunction,
             status = 1
             break
 
-        if display_result == True and i % 100 == 0:
+        if display_result == True and i % 1 == 0:
             print(f"Iteration #{i}:")
             print(f"Function value : {function_value:.4f} | Gradient norm : {norm:.4f} | Gradient delta norm : {delta_norm:.4f}") 
 
@@ -173,6 +194,7 @@ def adam_optimizer(function : ConvexFunction,
 
     print(f"Best result on {best_iteration_count}th iteration")
     print(f"Function value : {best_function_value:.4f} | Gradient norm : {best_norm:.4f} | Gradient delta norm : {best_delta_norm:.4f}")
+    print(f"X start : {x0} | X best : {best_x}")
     print(100 * "-")
 
     return OptimizeResult(
