@@ -264,7 +264,7 @@ def adam_optimizer(function : ConvexFunction,
             status = 0
             break
 
-        if delta_norm < tol:
+        if norm < tol:
             iteration_count = i 
             status = 1
             break

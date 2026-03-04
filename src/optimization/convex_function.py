@@ -35,7 +35,7 @@ class ConvexFunction:
             
             rng = np.random.RandomState(random_state)
 
-            # Let f(x) = (x_opt - x).T * A * (x_opt - x) + eps
+            # Let f(x) = (x_opt - x).T * A * (x_opt - x) + eps + с
             # Now we store x_opt value so that the function is positive
 
             self._x_opt = self.max_absolute_value * rng.uniform(-1, 1, size=self.in_features)
