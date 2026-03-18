@@ -9,9 +9,14 @@ class ConvexOptimization(gym.Env):
     Gymnasium custom environment: 
     https://gymnasium.farama.org/introduction/create_custom_env/
 
-    Represents convex optimization task procces where:
+    Represents convex optimization task process where:
         Observation values:
-            grad_norm: Gradient L2 norm,
+            l1_grad_norm: Gradient L1 norm ||∇F(Xt)||₂,
+            l2_grad_norm: Gradient L2 norm ||∇F(Xt)||₁,
+            l2_grad_norm_log: Logarithm of gradient L2 norm log(1 + ||∇F(Xt)||₂)
+            cos_sim: Cosine similarity between gradient Cos(||∇F(Xt)||₂, ||∇F(Xt-1)||₂),
+            grad_delta_norm: Norm of difference between gradient ||∇F(Xt)-∇F(Xt-1)||₂,
+            function_value_delta_log: Logarithm of difference between function value SIGN * log(1 + f(Xt) - f(Xt-1))
             ...
             _TODO MORE_
             ...
@@ -31,6 +36,7 @@ class ConvexOptimization(gym.Env):
         # The count of function in_features 
         self.in_features = in_features
         self.tol = 0.001
+        self.max_iterations = 10000
 
         # Set a box approximately where the minimum value is located
         self.max_absolute_value = max_absolute_value
@@ -42,13 +48,16 @@ class ConvexOptimization(gym.Env):
         self._function = None
 
         self.observation_space = spaces.Dict({
-            "grad_norm" : spaces.Box(low=0.0, high=np.inf, shape=(1,), dtype=np.float32)  
+            "l1_grad_norm" : spaces.Box(low=0.0, high=np.inf, shape=(1,), dtype=np.float32),  
+            "l2_grad_norm" : spaces.Box(low=0.0, high=np.inf, shape=(1,), dtype=np.float32),
+            "l2_grad_norm_log" : spaces.Box(low=0.0, high=np.inf, shape=(1,), dtype=np.float32),  
+            "cos_sim" : spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32), 
+            "grad_delta_norm" : spaces.Box(low=0.0, high=np.inf, shape=(1,), dtype=np.float32),
+            "function_value_delta_log" : spaces.Box(low=-100, high=100, shape=(1,), dtype=np.float32)
         })
 
         # We are choosing normalized learning rate in logarithmic scale
         self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32)
-
-        self.norm_clip = self.max_absolute_value**2
 
     def reset(self, seed: Optional[int] = None, options = None):
         super().reset(seed=seed)
@@ -64,17 +73,29 @@ class ConvexOptimization(gym.Env):
                                         random_state=obj_seed, 
                                         max_absolute_value=self.max_absolute_value)
         
+        
         self._x = self.np_random.uniform(low = -self.max_absolute_value, high=self.max_absolute_value, size=(self.in_features,))
         self._x0 = self._x.copy()
         self._grad = self._function.get_gradient(self._x)
         self._function_value = self._function(self._x)
-        self._grad_delta_norm = -np.inf
+        self._grad_delta_norm = 0.0
 
-        norm_val = np.linalg.norm(self._grad)
-        self._grad_norm = np.array([np.clip(norm_val, 0, self.norm_clip)], dtype=np.float32)
-        
+        l1_grad_norm_val = np.linalg.norm(self._grad, ord=1)
+        l2_grad_norm_val = np.linalg.norm(self._grad)
+
+        # Using 1e6 * grad_norm as norm cliping threshhold
+        self.l1_norm_clip = max(1e6 * l1_grad_norm_val, 1.0)
+        self.l2_norm_clip = max(1e6 * l2_grad_norm_val, 1.0)
+
+        self._grad_norm = l2_grad_norm_val
+
         observation = {
-            "grad_norm": self._grad_norm
+            "l1_grad_norm": np.array([l1_grad_norm_val], dtype=np.float32),
+            "l2_grad_norm": np.array([l2_grad_norm_val], dtype=np.float32),
+            "l2_grad_norm_log" : np.array([np.log1p(l2_grad_norm_val)], dtype=np.float32),
+            "cos_sim" : np.array([0.0], dtype=np.float32),
+            "grad_delta_norm": np.array([0.0], dtype=np.float32),
+            "function_value_delta_log": np.array([0.0], dtype=np.float32),
         }
 
         info = {
@@ -95,45 +116,75 @@ class ConvexOptimization(gym.Env):
         prev_x = self._x.copy()
         prev_grad = self._grad.copy()
         prev_function_value = self._function_value
-        prev_grad_norm = self._grad_norm.copy()
 
         self._x = prev_x - lr * prev_grad
         self._grad = self._function.get_gradient(self._x)
         self._function_value = self._function(self._x)
         self._grad_delta_norm = np.linalg.norm(self._grad - prev_grad)
 
-        norm_val = np.linalg.norm(self._grad)
-        self._grad_norm = np.array([np.clip(norm_val, 0, self.norm_clip)], dtype=np.float32)
+        l2_grad_norm_prev = np.linalg.norm(prev_grad)
+        l2_grad_norm_curr = np.linalg.norm(self._grad)
 
-        eps = 1e-12
+        eps = 1e-8
 
         reward = float(np.log2(prev_function_value + eps) - np.log2(self._function_value + eps))
         reward = np.clip(reward, -5.0, 5.0)
 
+        # Calculating obserbation features
+
+        l1_grad_norm = np.clip(np.linalg.norm(self._grad, ord = 1), 0, self.l1_norm_clip)
+        l2_grad_norm = np.clip(l2_grad_norm_curr, 0, self.l2_norm_clip)
+        l2_grad_norm_log = np.log1p(l2_grad_norm)
+
+        if l2_grad_norm_prev > 1e-12 and l2_grad_norm_curr > 1e-12:
+            grad_unit = self._grad / l2_grad_norm_curr
+            prev_grad_unit = prev_grad / l2_grad_norm_prev
+
+            cos_sim = np.dot(grad_unit, prev_grad_unit)
+            cos_sim = np.clip(cos_sim, -1.0, 1.0)
+        else:
+            cos_sim = 0.0
+
+        grad_delta_norm = np.clip(self._grad_delta_norm, 0, self.l2_norm_clip)
+        function_value_delta = self._function_value - prev_function_value
+        function_value_delta_log = np.clip(np.sign(function_value_delta) * np.log1p(np.abs(function_value_delta)), -100.0, 100.0)
+
         observation = {
-            "grad_norm": self._grad_norm
+            "l1_grad_norm": np.array([l1_grad_norm], dtype=np.float32),
+            "l2_grad_norm": np.array([l2_grad_norm], dtype=np.float32),
+            "l2_grad_norm_log" : np.array([l2_grad_norm_log], dtype=np.float32),
+            "cos_sim" :  np.array([cos_sim], dtype=np.float32),
+            "grad_delta_norm" : np.array([grad_delta_norm], dtype=np.float32),
+            "function_value_delta_log" : np.array([function_value_delta_log], dtype=np.float32),
         }
 
         info = {
             "iteration" : self._iteration,
             "function_value" : self._function_value,
-            "grad_norm" : self._grad_norm, 
+            "grad_norm" : l2_grad_norm, 
             "grad_delta_norm" : self._grad_delta_norm,
             "x" : self._x,
             "status" : ""
         }
 
-        diverged = bool(not(np.isfinite(self._grad).all() and np.isfinite(self._function_value)))
-        converged = bool(self._grad_norm[0] < self.tol)
+        self._grad_norm = l2_grad_norm
 
-        truncated = bool(self._iteration > 10000)
-        
-        if diverged or ((self._grad_norm[0] / (prev_grad_norm[0] + eps)) > 1e3):
-            reward += -100
+        is_non_finite = (
+            not np.isfinite(self._grad).all()
+            or not np.isfinite(self._function_value)
+        )
+        is_exploding = (l2_grad_norm_curr / (l2_grad_norm_prev + eps)) > 1e3
+
+        diverged   = bool(is_non_finite or is_exploding)
+        converged  = bool(self._grad_norm < self.tol)
+        truncated  = bool(self._iteration >= self.max_iterations)
+
+        if diverged:
+            reward += -100.0
             terminated = True
             info["status"] = "diverged"
         elif converged:
-            reward += 100
+            reward += 100.0
             terminated = True
             info["status"] = "converged"
         else:
