@@ -1,7 +1,8 @@
 import numpy as np
 from typing import Optional
+from src.optimization.function import Function
 
-class ConvexFunction:
+class ConvexFunction(Function):
     """
     Represents a convex funtion in form of: 
         f(x) = x.T * A * x + b.T * x + c
@@ -24,7 +25,7 @@ class ConvexFunction:
                   random_state : Optional[int] = None,
                   max_absolute_value : float = 1.0,
                   tol: float = 1e-10) -> None:
-        self._in_features = in_features
+        super().__init__(in_features=in_features)
         self._tol = tol
         self._max_absolute_value = max_absolute_value
         self._eps = 1e-12
@@ -33,7 +34,7 @@ class ConvexFunction:
             if A is not None or b is not None or c is not None:
                 raise ValueError("Cannot use random generation and attribute definition at the same time.")
             
-            rng = np.random.RandomState(random_state)
+            rng = np.random.default_rng(random_state)
 
             # Let f(x) = (x_opt - x).T * A * (x_opt - x) + eps + с
             # Now we store x_opt value so that the function is positive
@@ -96,10 +97,6 @@ class ConvexFunction:
         if x.ndim != 1 or x.shape[0] != self.in_features:
                 raise ValueError("Vector dimension is incorrect")
         return 2 * self._A @ x + self._b
-    
-    @property
-    def in_features(self):
-        return self._in_features
     
     @property
     def max_absolute_value(self):

@@ -1,6 +1,6 @@
 import numpy as np
 from typing import NamedTuple, Optional, List
-from src.optimization.convex_function import ConvexFunction
+from src.optimization.function import Function
 
 class OptimizeResult(NamedTuple):
     iteration_count: int
@@ -11,7 +11,7 @@ class OptimizeResult(NamedTuple):
     grad_delta_norm : float  
     status: int # -1 - max iteration reached, 0 - gradient exploded, 1 - gradient converged
 
-def gradient_descent_optimizer(function : ConvexFunction,
+def gradient_descent_optimizer(function : Function,
                                x0 : Optional[np.ndarray] = None, 
                                lr : float = 0.001, 
                                tol : float = 0.001, 
@@ -149,7 +149,7 @@ def gradient_descent_optimizer(function : ConvexFunction,
         status=status
     )
 
-def adam_optimizer(function : ConvexFunction,
+def adam_optimizer(function : Function,
                     x0 : Optional[np.ndarray] = None, 
                     lr : float = 0.001, 
                     tol : float = 0.001, 
