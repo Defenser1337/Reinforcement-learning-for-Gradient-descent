@@ -24,9 +24,24 @@ if torch.cuda.is_available():
     logger.info(f"CUDA Version: {torch.version.cuda}")
 
 TRAINING_CONFIGS = {
-    5: {"timesteps": 500_000, "n_envs": 32, "batch_size": 1024, "policy_kwargs": {}},
-    10: {"timesteps": 500_000, "n_envs": 32, "batch_size": 1024, "policy_kwargs": {}},
-    100: {"timesteps": 1_000_000, "n_envs": 16, "batch_size": 1024, "policy_kwargs": {}},
+    5: {"timesteps": 500_000, 
+        "n_envs": 32, 
+        "batch_size": 1024, 
+        "policy_kwargs": {
+            "net_arch": dict(pi=[512, 512], vf=[512, 512])
+        }},
+    10: {"timesteps": 500_000, 
+         "n_envs": 32, 
+         "batch_size": 1024, 
+         "policy_kwargs": {
+            "net_arch": dict(pi=[512, 512], vf=[512, 512])
+        }},
+    100: {"timesteps": 1_000_000, 
+          "n_envs": 16, 
+          "batch_size": 1024, 
+          "policy_kwargs": {
+            "net_arch": dict(pi=[512, 512], vf=[512, 512])
+        }},
     800: {
         "timesteps": 2_000_000,
         "n_envs": 16,
