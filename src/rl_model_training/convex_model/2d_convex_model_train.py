@@ -5,6 +5,7 @@ from stable_baselines3.common.vec_env import VecNormalize
 import src.gymnasium_envs.convex_optimization_env
 
 log_dir = "logs"
+model_dir = "model"
 dim = 2
 
 config = {
@@ -33,5 +34,5 @@ model = PPO(
 
 model.learn(total_timesteps=config[dim]["timesteps"])
 
-model.save("2d_convex_optimization")
-vec_env.save("2d_convex_optimization_vec_normalize_stats.pkl")
+model.save(f"{model_dir}/{dim}d_convex_optimization")
+vec_env.save(f"{model_dir}/{dim}d_convex_optimization_vec_normalize_stats.pkl")
