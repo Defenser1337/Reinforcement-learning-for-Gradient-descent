@@ -1,6 +1,7 @@
 import numpy as np
 from typing import Optional
 from src.optimization.function import Function
+from src.utils.prng import get_rng
 
 class ConvexFunction(Function):
     """
@@ -34,7 +35,7 @@ class ConvexFunction(Function):
             if A is not None or b is not None or c is not None:
                 raise ValueError("Cannot use random generation and attribute definition at the same time.")
             
-            rng = np.random.default_rng(random_state)
+            rng = get_rng(seed=random_state, location_name="convex_function_class")
 
             # Let f(x) = (x_opt - x).T * A * (x_opt - x) + eps + с
             # Now we store x_opt value so that the function is positive

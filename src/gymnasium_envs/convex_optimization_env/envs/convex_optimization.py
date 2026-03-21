@@ -211,3 +211,6 @@ class ConvexOptimization(gym.Env):
 
     def get_x_start(self):
         return self._x0.copy()
+    
+    def get_function(self):
+        return self._function

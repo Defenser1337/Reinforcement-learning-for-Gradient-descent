@@ -2,6 +2,7 @@ import numpy as np
 from typing import Optional
 from src.optimization.function import Function
 from src.optimization.convex_function import ConvexFunction
+from src.utils.prng import get_rng
 
 class ConvexFunctionWithNoise(Function):
     """
@@ -29,7 +30,7 @@ class ConvexFunctionWithNoise(Function):
         self._amplitude = amplitude
         self._frequency = frequency 
 
-        self._rng = np.random.default_rng(random_state)
+        self._rng = get_rng(seed=random_state, location_name="convex_function_with_noise_class")
 
         self._convex_function_seed = self._rng.integers(0, 2**31 - 1)
 

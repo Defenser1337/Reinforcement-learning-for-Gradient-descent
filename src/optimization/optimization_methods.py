@@ -1,6 +1,7 @@
 import numpy as np
 from typing import NamedTuple, Optional, List
 from src.optimization.function import Function
+from src.utils.prng import get_rng
 
 class OptimizeResult(NamedTuple):
     iteration_count: int
@@ -44,7 +45,7 @@ def gradient_descent_optimizer(function : Function,
     max_absolute_value = function.max_absolute_value
 
     if x0 is None and random_state is not None:
-        rng = np.random.RandomState(random_state)
+        rng = get_rng(seed=random_state, location_name="gd_optimizer_function")
         x0 = max_absolute_value * rng.uniform(-1, 1, size = in_features)
         prev_x = x0.copy()
     elif x0 is not None and random_state is None:
@@ -192,7 +193,7 @@ def adam_optimizer(function : Function,
     max_absolute_value = function.max_absolute_value
 
     if x0 is None and random_state is not None:
-        rng = np.random.RandomState(random_state)
+        rng = get_rng(seed=random_state, location_name="adam_optimizer_function")
         x0 = max_absolute_value * rng.uniform(-1, 1, size = in_features)
         prev_x = x0.copy()
     elif x0 is not None and random_state is None:
