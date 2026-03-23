@@ -3,6 +3,7 @@ from gymnasium import spaces
 import numpy as np
 from typing import Optional
 from src.optimization.convex_function import ConvexFunction
+from src.optimization.convex_function_w_noise import ConvexFunctionWithNoise
 
 class ConvexOptimization(gym.Env):
     """
@@ -30,13 +31,14 @@ class ConvexOptimization(gym.Env):
 
     metadata = {"render_modes": ["ansi"]}
 
-    def __init__(self, in_features : int = 1, render_mode = None, max_absolute_value : np.float32 = 1.0):
+    def __init__(self, in_features : int = 1, render_mode = None, max_absolute_value : np.float32 = 1.0, add_noise = False):
         self.render_mode = render_mode
 
         # The count of function in_features 
         self.in_features = in_features
         self.tol = 0.001
         self.max_iterations = 10000
+        self.add_noise = add_noise
 
         # Set a box approximately where the minimum value is located
         self.max_absolute_value = max_absolute_value
@@ -69,7 +71,13 @@ class ConvexOptimization(gym.Env):
 
         self._iteration = 0
 
-        self._function = ConvexFunction(in_features=self.in_features, 
+
+        if self.add_noise == True:
+            self._function = ConvexFunctionWithNoise(in_features=self.in_features, 
+                                        random_state=obj_seed, 
+                                        max_absolute_value=self.max_absolute_value)
+        else:
+            self._function = ConvexFunction(in_features=self.in_features, 
                                         random_state=obj_seed, 
                                         max_absolute_value=self.max_absolute_value)
         
