@@ -5,7 +5,7 @@ from stable_baselines3.common.vec_env import VecNormalize
 import src.gymnasium_envs.convex_optimization_env
 
 log_dir = "logs"
-model_dir = "model"
+model_dir = "models"
 dim = 2
 
 config = {
