@@ -9,7 +9,7 @@ model_dir = "models"
 dim = 2
 
 config = {
-    2 : {"timesteps": 10_000, "n_envs": 14, "batch_size": 1024, "policy_kwargs": {}}
+    2 : {"timesteps": 100_000, "n_envs": 14, "batch_size": 1024, "policy_kwargs": {}}
 }
 
 vec_env = make_vec_env(
