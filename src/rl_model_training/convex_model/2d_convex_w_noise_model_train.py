@@ -9,7 +9,14 @@ model_dir = "models"
 dim = 2
 
 config = {
-    2 : {"timesteps": 100_000, "n_envs": 14, "batch_size": 1024, "policy_kwargs": {}}
+    2 : {
+            "timesteps": 1_000_000, 
+            "n_envs": 32, 
+            "batch_size": 1024,  
+            "policy_kwargs": {
+                "net_arch": dict(pi=[512, 512], vf=[512, 512])
+            }
+        }
 }
 
 vec_env = make_vec_env(
@@ -28,9 +35,11 @@ vec_env = VecNormalize(
 model = PPO(
     "MultiInputPolicy",
     vec_env,
-    verbose=1,  
+    verbose=1,
+    batch_size=config[dim]["batch_size"], 
     tensorboard_log=f"{log_dir}/{dim}d/",
-    policy_kwargs=config[dim]["policy_kwargs"]
+    policy_kwargs=config[dim]["policy_kwargs"],
+    device="cuda"
 )
 
 model.learn(total_timesteps=config[dim]["timesteps"])
