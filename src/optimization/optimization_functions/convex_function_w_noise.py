@@ -1,7 +1,7 @@
 import numpy as np
 from typing import Optional
-from src.optimization.function import Function
-from src.optimization.convex_function import ConvexFunction
+from src.optimization.optimization_functions.function import Function
+from src.optimization.optimization_functions.convex_function import ConvexFunction
 from src.utils.prng import get_rng
 
 class ConvexFunctionWithNoise(Function):

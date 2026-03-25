@@ -1,6 +1,6 @@
 import numpy as np
 from typing import Optional
-from src.optimization.function import Function
+from src.optimization.optimization_functions.function import Function
 from src.utils.prng import get_rng
 
 class ConvexFunction(Function):

@@ -2,8 +2,8 @@ import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
 from typing import Optional
-from src.optimization.convex_function import ConvexFunction
-from src.optimization.convex_function_w_noise import ConvexFunctionWithNoise
+from src.optimization.optimization_functions.convex_function import ConvexFunction
+from src.optimization.optimization_functions.convex_function_w_noise import ConvexFunctionWithNoise
 
 class ConvexOptimization(gym.Env):
     """
