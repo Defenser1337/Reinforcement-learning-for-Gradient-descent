@@ -52,7 +52,8 @@ class CustomLR(Optimizer):
         l2_grad_norm_log = np.log1p(l2_grad_norm)
         cos_sim = self._calculate_cos_sim()
         grad_delta_norm = self._calculate_grad_delta_norm()
-        function_value_delta_log = self._calculate_function_value_delta_log()
+        loss_delta_log = self._calculate_loss_delta_log()
+        loss_log = self._calculate_loss_log()
 
         self._update_prev_grad_params()
 
@@ -62,7 +63,8 @@ class CustomLR(Optimizer):
             "l2_grad_norm_log" : np.array([l2_grad_norm_log], dtype=np.float32),
             "cos_sim" :  np.array([cos_sim], dtype=np.float32),
             "grad_delta_norm" : np.array([grad_delta_norm], dtype=np.float32),
-            "function_value_delta_log" : np.array([function_value_delta_log], dtype=np.float32),
+            "loss_delta_log" : np.array([loss_delta_log], dtype=np.float32),
+            "loss_log" : np.array([loss_log], dtype=np.float32),
         }
 
         return observation
@@ -71,7 +73,7 @@ class CustomLR(Optimizer):
     def get_info(self, iteration):
         info = {
             "iteration": iteration,
-            "function_value": self._curr_loss   if self._curr_loss   is not None else 0.0,
+            "loss": self._curr_loss   if self._curr_loss   is not None else 0.0,
             "grad_norm": self._curr_l2_norm if self._curr_l2_norm is not None else 0.0,
             "grad_delta_norm": self._calculate_grad_delta_norm(),
             "status": ""
@@ -174,7 +176,7 @@ class CustomLR(Optimizer):
         
         return min(grad_delta_norm, self._l2_norm_clip)
     
-    def _calculate_function_value_delta_log(self):
+    def _calculate_loss_delta_log(self):
         if self._curr_loss is not None and self._prev_loss is not None:
             delta = self._curr_loss - self._prev_loss
             sign = 1.0 if delta >= 0 else -1.0
@@ -183,3 +185,8 @@ class CustomLR(Optimizer):
             function_value_delta_log = 0.0
 
         return function_value_delta_log
+    
+    def _calculate_loss_log(self):
+        loss_log = np.log1p(self._curr_loss)
+
+        return loss_log

@@ -51,7 +51,8 @@ class NeuralNetworkOptimization(gym.Env):
             "l2_grad_norm_log" : spaces.Box(low=0.0, high=np.inf, shape=(1,), dtype=np.float32),  
             "cos_sim" : spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32), 
             "grad_delta_norm" : spaces.Box(low=0.0, high=np.inf, shape=(1,), dtype=np.float32),
-            "function_value_delta_log" : spaces.Box(low=-100, high=100, shape=(1,), dtype=np.float32)
+            "loss_delta_log" : spaces.Box(low=-100, high=100, shape=(1,), dtype=np.float32),
+            "loss_log": spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32)
         })
 
         self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32)
@@ -115,7 +116,7 @@ class NeuralNetworkOptimization(gym.Env):
     def step(self, action : np.ndarray):
         self._iteration += 1
 
-        lr = 10**(action[0] * 3 - 4)
+        lr = 10**(action[0] * 3 - 2)
 
         self._optimizer.step(lr=lr)
         self._curr_loss = self._compute_gradients()
@@ -124,13 +125,18 @@ class NeuralNetworkOptimization(gym.Env):
         info = self._optimizer.get_info(self._iteration)
 
         reward = float(np.log2(self._prev_loss + self.eps) - np.log2(self._curr_loss + self.eps))
-        reward = np.clip(reward, -5.0, 5.0)
+        reward = np.clip(reward, -10.0, 10.0)
 
         diverged = self._optimizer.is_diverged()
         truncated = bool(self._iteration >= self.max_iterations)
+        converged = self._curr_loss < self.tol
 
-        if diverged:
-            reward += -100.0
+        if converged:
+            terminated = True
+            reward += 50.0
+            info["status"] = "converged"
+        elif diverged:
+            reward += -50.0
             terminated = True
             info["status"] = "diverged"
         else:
