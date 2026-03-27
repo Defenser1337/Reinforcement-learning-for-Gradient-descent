@@ -68,16 +68,29 @@ class CustomLR(Optimizer):
         return observation
     
     @torch.no_grad()
-    def get_info(self, iteration, status):
+    def get_info(self, iteration):
         info = {
             "iteration": iteration,
             "function_value": self._curr_loss   if self._curr_loss   is not None else 0.0,
             "grad_norm": self._curr_l2_norm if self._curr_l2_norm is not None else 0.0,
             "grad_delta_norm": self._calculate_grad_delta_norm(),
-            "status": status
+            "status": ""
         }
 
         return info
+    
+    @torch.no_grad()
+    def is_diverged(self):
+        if self._curr_loss is None:
+            return False
+        
+        if not math.isfinite(self._curr_loss):
+            return True
+        
+        if not self._curr_grad_valid:
+            return True
+        
+        return False
 
     def _collect_flat_grad(self):
         grads = []
