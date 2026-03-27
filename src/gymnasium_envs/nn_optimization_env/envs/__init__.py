@@ -1,3 +1,3 @@
-from src.gymnasium_envs.convex_optimization_env.envs.convex_optimization import ConvexOptimization
+from src.gymnasium_envs.nn_optimization_env.envs.nn_optimization import NeuralNetworkOptimization
 
-__all__ = ["ConvexOptimization"]
+__all__ = ["NeuralNetworkOptimization"]

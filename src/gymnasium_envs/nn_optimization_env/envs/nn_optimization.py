@@ -1,7 +1,17 @@
-import gymnasium as gym
-from gymnasium import spaces
 import numpy as np
 from typing import Optional
+import itertools
+
+import gymnasium as gym
+from gymnasium import spaces
+
+import torchvision.datasets as datasets
+from torch.utils.data import TensorDataset, DataLoader
+import torch.nn as nn
+import torch
+
+from src.nn_models.lenet import LeNet
+from src.optimization.custom_lr_optimizer import CustomLR
 
 class NeuralNetworkOptimization(gym.Env):
     """
@@ -10,8 +20,8 @@ class NeuralNetworkOptimization(gym.Env):
 
     Represents neural network optimization task process where:
         Observation values:
-            l1_grad_norm: Gradient L1 norm ||∇F(Xt)||₂,
-            l2_grad_norm: Gradient L2 norm ||∇F(Xt)||₁,
+            l1_grad_norm: Gradient L1 norm ||∇F(Xt)||₁,
+            l2_grad_norm: Gradient L2 norm ||∇F(Xt)||₂,
             l2_grad_norm_log: Logarithm of gradient L2 norm log(1 + ||∇F(Xt)||₂)
             cos_sim: Cosine similarity between gradient Cos(||∇F(Xt)||₂, ||∇F(Xt-1)||₂),
             grad_delta_norm: Norm of difference between gradient ||∇F(Xt)-∇F(Xt-1)||₂,
@@ -22,18 +32,18 @@ class NeuralNetworkOptimization(gym.Env):
         Action value:
             lr: normalized learning rate in logarithmic scale in the bound [-1, 1]
     Parameters:
-        in_features (int): dimension of optimization task
         render_mode: Only accept "ansi" and None type
-        max_absolute_value (float): set a box approximately where the minimum value is located
     """
 
-    metadata = {"render_modes": ["ansi"]}
+    metadata = {"render_modes": [None]}
 
-    def __init__(self, render_mode = None):
+    def __init__(self, render_mode = None, dataset_name : Optional[str] = None):
         self.render_mode = render_mode
 
         self.tol = 0.001
         self.max_iterations = 10000
+        self.dataset_name = dataset_name
+        self.eps = 1e-8
 
         self.observation_space = spaces.Dict({
             "l1_grad_norm" : spaces.Box(low=0.0, high=np.inf, shape=(1,), dtype=np.float32),  
@@ -44,96 +54,108 @@ class NeuralNetworkOptimization(gym.Env):
             "function_value_delta_log" : spaces.Box(low=-100, high=100, shape=(1,), dtype=np.float32)
         })
 
-        # We are choosing normalized learning rate in logarithmic scale
         self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32)
+
+        if dataset_name is None:
+            raise ValueError("Missing dataset")
+        elif dataset_name == "MNIST":
+            train_dataset = datasets.MNIST(root='./data', train=True, download=True)
+            test_dataset = datasets.MNIST(root='./data', train=False, download=True)
+
+            X_train = train_dataset.data.unsqueeze(1).float() / 255.0
+            y_train = train_dataset.targets.long()
+
+            X_test = test_dataset.data.unsqueeze(1).float() / 255.0
+            y_test = test_dataset.targets.long()
+        else:
+            raise ValueError("Incorrect dataset name.")
+
+        self._train_ds = TensorDataset(X_train, y_train)
+        self._test_ds = TensorDataset(X_test, y_test)
+
+        test_loader = DataLoader(self._test_ds, batch_size=256, shuffle=True)
+
+        self._test_loader = test_loader
 
     def reset(self, seed: Optional[int] = None, options = None):
         super().reset(seed=seed)
 
+        g = torch.Generator()
 
-        observation = {
-            "l1_grad_norm": np.array([l1_grad_norm_val], dtype=np.float32),
-            "l2_grad_norm": np.array([l2_grad_norm_val], dtype=np.float32),
-            "l2_grad_norm_log" : np.array([np.log1p(l2_grad_norm_val)], dtype=np.float32),
-            "cos_sim" : np.array([0.0], dtype=np.float32),
-            "grad_delta_norm": np.array([0.0], dtype=np.float32),
-            "function_value_delta_log": np.array([0.0], dtype=np.float32),
-        }
+        if seed is not None:
+            g.manual_seed(seed)
 
-        info = {
-            "iteration" :   self._iteration,
-            "function_value" : self._function_value,
-            "grad_norm" : self._grad_norm, 
-            "grad_delta_norm" : self._grad_delta_norm,
-            "x" : self._x
-        }
+        train_loader = DataLoader(self._train_ds, batch_size=256, shuffle=True, generator=g)
+        self._train_loader = itertools.cycle(train_loader)
+
+        self._iteration = 0
+
+        # Initializing objects for neural network optimization
+        self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        if self.dataset_name == "MNIST":
+            self._model = LeNet(seed=seed).to(self._device)
+            self._criterion = nn.CrossEntropyLoss()
+        else:
+            raise ValueError("Incorrect dataset name.")
+
+        self._optimizer = CustomLR(self._model.parameters())
+        self._optimizer.zero_grad()
+
+        self._prev_loss = self._compute_gradients()
+        self._curr_loss = self._prev_loss
+
+        # Initializing observation values
+
+        observation = self._optimizer.get_obs(loss=self._curr_loss)
+        info = self._optimizer.get_info(self._iteration)
 
         return observation, info
 
     def step(self, action : np.ndarray):
+        self._iteration += 1
 
-        observation = {
-            "l1_grad_norm": np.array([l1_grad_norm], dtype=np.float32),
-            "l2_grad_norm": np.array([l2_grad_norm], dtype=np.float32),
-            "l2_grad_norm_log" : np.array([l2_grad_norm_log], dtype=np.float32),
-            "cos_sim" :  np.array([cos_sim], dtype=np.float32),
-            "grad_delta_norm" : np.array([grad_delta_norm], dtype=np.float32),
-            "function_value_delta_log" : np.array([function_value_delta_log], dtype=np.float32),
-        }
+        lr = 10**(action[0] * 3 - 4)
 
-        info = {
-            "iteration" : self._iteration,
-            "function_value" : self._function_value,
-            "grad_norm" : l2_grad_norm, 
-            "grad_delta_norm" : self._grad_delta_norm,
-            "x" : self._x,
-            "status" : ""
-        }
+        self._optimizer.step(lr=lr)
+        self._curr_loss = self._compute_gradients()
 
-        self._grad_norm = l2_grad_norm
+        observation = self._optimizer.get_obs(loss=self._curr_loss)
+        info = self._optimizer.get_info(self._iteration)
 
-        is_non_finite = (
-            not np.isfinite(self._grad).all()
-            or not np.isfinite(self._function_value)
-        )
-        is_exploding = (l2_grad_norm_curr / (l2_grad_norm_prev + eps)) > 1e3
+        reward = float(np.log2(self._prev_loss + self.eps) - np.log2(self._curr_loss + self.eps))
+        reward = np.clip(reward, -5.0, 5.0)
 
-        diverged   = bool(is_non_finite or is_exploding)
-        converged  = bool(self._grad_norm < self.tol)
-        truncated  = bool(self._iteration >= self.max_iterations)
+        diverged = self._optimizer.is_diverged()
+        truncated = bool(self._iteration >= self.max_iterations)
 
         if diverged:
             reward += -100.0
             terminated = True
             info["status"] = "diverged"
-        elif converged:
-            reward += 100.0
-            terminated = True
-            info["status"] = "converged"
         else:
             terminated = False
+
+        self._prev_loss = self._curr_loss
         
         return observation, reward, terminated, truncated, info
     
     def render(self):
-        if self.render_mode == "ansi":
-            render_string = (
-                f"\n--- Iteration {self._iteration} ---\n"
-                f"Function Value: {self._function_value:.6f}\n"
-                f"Gradient Norm:  {np.linalg.norm(self._grad):.6f}\n"
-                f"A: {self._function.A}\n"
-                f"b: {self._function.b}\n"
-                f"c: {self._function.c}\n"
-                f"X start: {self._x0}\n"
-                f"X best: {self._x}\n"
-            )
-            return render_string
+        pass
 
     def close(self):
         pass
-
-    def get_x_start(self):
-        return self._x0.copy()
     
-    def get_function(self):
-        return self._function
+    def _compute_gradients(self):
+        inputs, labels = next(self._train_loader)
+        inputs, labels = inputs.to(self._device), labels.to(self._device)
+
+        self._optimizer.zero_grad()
+
+        outputs = self._model(inputs)
+        loss = self._criterion(outputs, labels)
+        loss.backward()
+
+        loss_value = loss.item()
+
+        return loss_value
