@@ -5,30 +5,34 @@ from typing import Optional
 from src.optimization.optimization_functions.convex_function import ConvexFunction
 from src.optimization.optimization_functions.convex_function_w_noise import ConvexFunctionWithNoise
 
-class ConvexOptimizationV0(gym.Env):
+class ConvexOptimizationV1(gym.Env):
     """
     Represents convex function optimization task process.
 
     Gymnasium custom environment: 
     https://gymnasium.farama.org/introduction/create_custom_env/
 
-    Version 0:
-        First iteration of environment.
+    Version 1:  
+        Reworked observation values:
+            Deleted some observation values and added EMA normalizaion. 
 
     Observation values:
-        l1_grad_norm: Gradient L1 norm ||∇F(Xt)||₂,
-        l2_grad_norm: Gradient L2 norm ||∇F(Xt)||₁,
-        l2_grad_norm_log: Logarithm of gradient L2 norm log(1 + ||∇F(Xt)||₂)
-        cos_sim: Cosine similarity between gradient Cos(||∇F(Xt)||₂, ||∇F(Xt-1)||₂),
-        grad_delta_norm: Norm of difference between gradient ||∇F(Xt)-∇F(Xt-1)||₂,
-        function_value_delta_log: Logarithm of difference between function value SIGN * log(1 + f(Xt) - f(Xt-1))
-        ...
-        _TODO MORE_
-        ...
+        grad_norm_scaled_log: 
+            Logarithm of normalized gradient L2 norm log(1 + ||∇F||₂ / (EMA(||∇F||₂) + ϵ)),
+        grad_delta_norm_scaled_log: 
+            Logarithm of normalized norm of difference between gradient log(1 + ||∇F(Xt)-∇F(Xt-1)||₂ / (EMA(||∇F(Xt)-∇F(Xt-1)||₂) + ϵ)),
+        cos_sim: 
+            Cosine similarity between gradients Cos_sim(∇F(Xt), ∇F(Xt-1)),
+        loss_scaled_log:
+            Logarithm of normalized loss log(1 + F(X) / (EMA(F) + ϵ))
+        loss_delta_scaled_log:
+            Logarithm of normalized difference between losses sign(ΔF) * log(1 + |ΔF| / (|EMA(ΔF)| + ϵ))
+        prev_action:
+            Previous action
 
     Action value:
         lr: normalized learning rate in logarithmic scale in the bound [-1, 1]
-
+        
     Parameters:
         in_features (int): dimension of optimization task
         render_mode: Only accept "ansi" and None type
