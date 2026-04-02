@@ -5,7 +5,7 @@ from typing import Optional
 from src.optimization.optimization_functions.convex_function import ConvexFunction
 from src.optimization.optimization_functions.convex_function_w_noise import ConvexFunctionWithNoise
 
-class ConvexOptimization(gym.Env):
+class ConvexOptimizationV0(gym.Env):
     """
     Gymnasium custom environment: 
     https://gymnasium.farama.org/introduction/create_custom_env/
