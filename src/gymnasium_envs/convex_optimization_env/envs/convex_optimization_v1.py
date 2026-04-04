@@ -60,11 +60,11 @@ class ConvexOptimizationV1(gym.Env):
         self._function = None
 
         self.observation_space = spaces.Dict({
-            "grad_norm_scaled_log" : spaces.Box(low=0.0, high=10.0, shape=(1,), dtype=np.float32),  
-            "grad_delta_norm_scaled_log" : spaces.Box(low=0.0, high=10.0, shape=(1,), dtype=np.float32),
+            "grad_norm_scaled_log" : spaces.Box(low=0.0, high=100.0, shape=(1,), dtype=np.float32),  
+            "grad_delta_norm_scaled_log" : spaces.Box(low=0.0, high=100.0, shape=(1,), dtype=np.float32),
             "cos_sim" : spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32), 
-            "loss_scaled_log" : spaces.Box(low=0.0, high=10.0, shape=(1,), dtype=np.float32),
-            "loss_delta_scaled_log" : spaces.Box(low=-10.0, high=10.0, shape=(1,), dtype=np.float32),
+            "loss_scaled_log" : spaces.Box(low=0.0, high=100.0, shape=(1,), dtype=np.float32),
+            "loss_delta_scaled_log" : spaces.Box(low=-100.0, high=100.0, shape=(1,), dtype=np.float32),
             "prev_action" : spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32)
         })
 
