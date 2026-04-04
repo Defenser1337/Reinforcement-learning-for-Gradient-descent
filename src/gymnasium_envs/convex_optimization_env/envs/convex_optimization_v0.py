@@ -5,24 +5,30 @@ from typing import Optional
 from src.optimization.optimization_functions.convex_function import ConvexFunction
 from src.optimization.optimization_functions.convex_function_w_noise import ConvexFunctionWithNoise
 
-class ConvexOptimization(gym.Env):
+class ConvexOptimizationV0(gym.Env):
     """
+    Represents convex function optimization task process.
+
     Gymnasium custom environment: 
     https://gymnasium.farama.org/introduction/create_custom_env/
 
-    Represents convex optimization task process where:
-        Observation values:
-            l1_grad_norm: Gradient L1 norm ||∇F(Xt)||₂,
-            l2_grad_norm: Gradient L2 norm ||∇F(Xt)||₁,
-            l2_grad_norm_log: Logarithm of gradient L2 norm log(1 + ||∇F(Xt)||₂)
-            cos_sim: Cosine similarity between gradient Cos(||∇F(Xt)||₂, ||∇F(Xt-1)||₂),
-            grad_delta_norm: Norm of difference between gradient ||∇F(Xt)-∇F(Xt-1)||₂,
-            function_value_delta_log: Logarithm of difference between function value SIGN * log(1 + f(Xt) - f(Xt-1))
-            ...
-            _TODO MORE_
-            ...
-        Action value:
-            lr: normalized learning rate in logarithmic scale in the bound [-1, 1]
+    Version 0:
+        First iteration of environment.
+
+    Observation values:
+        l1_grad_norm: Gradient L1 norm ||∇F(Xt)||₂,
+        l2_grad_norm: Gradient L2 norm ||∇F(Xt)||₁,
+        l2_grad_norm_log: Logarithm of gradient L2 norm log(1 + ||∇F(Xt)||₂)
+        cos_sim: Cosine similarity between gradient Cos(||∇F(Xt)||₂, ||∇F(Xt-1)||₂),
+        grad_delta_norm: Norm of difference between gradient ||∇F(Xt)-∇F(Xt-1)||₂,
+        function_value_delta_log: Logarithm of difference between function value SIGN * log(1 + f(Xt) - f(Xt-1))
+        ...
+        _TODO MORE_
+        ...
+
+    Action value:
+        lr: normalized learning rate in logarithmic scale in the bound [-1, 1]
+
     Parameters:
         in_features (int): dimension of optimization task
         render_mode: Only accept "ansi" and None type
