@@ -9,12 +9,13 @@ model_dir = "models"
 dim = 2
 
 config = {
-    2 : {"timesteps": 10_000, "n_envs": 14, "batch_size": 1024, "policy_kwargs": {}}
+    "timesteps": 10_000, 
+    "n_envs": 14,
 }
 
 vec_env = make_vec_env(
-    "convex_optimization_env/ConvexOptimization-v0", 
-    n_envs=config[dim]["n_envs"],
+    "convex_optimization_env/ConvexOptimization-v1", 
+    n_envs=config["n_envs"],
     env_kwargs={
         "in_features": dim
     })
@@ -28,11 +29,10 @@ model = PPO(
     "MultiInputPolicy",
     vec_env,
     verbose=1,  
-    tensorboard_log=f"{log_dir}/{dim}d/",
-    policy_kwargs=config[dim]["policy_kwargs"]
+    tensorboard_log=f"{log_dir}/{dim}d/"
 )
 
-model.learn(total_timesteps=config[dim]["timesteps"])
+model.learn(total_timesteps=config["timesteps"])
 
 model.save(f"{model_dir}/{dim}d_convex_optimization")
 vec_env.save(f"{model_dir}/{dim}d_convex_optimization_vec_normalize_stats.pkl")

@@ -67,7 +67,7 @@ def train_dimension_model(dim: int, config: Dict[str, Any], log_dir: str = "logs
     vec_env = None
     try:
         vec_env = make_vec_env(
-            "convex_optimization_env/ConvexOptimization-v0",
+            "convex_optimization_env/ConvexOptimization-v1",
             n_envs=config["n_envs"],
             env_kwargs={"in_features": dim}
         )
