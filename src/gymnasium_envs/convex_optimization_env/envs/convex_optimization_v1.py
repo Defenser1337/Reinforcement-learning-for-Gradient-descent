@@ -5,6 +5,9 @@ from typing import Optional
 from src.optimization.optimization_functions.convex_function import ConvexFunction
 from src.optimization.optimization_functions.convex_function_w_noise import ConvexFunctionWithNoise
 
+EPS = 1e-8
+ALPHA = 1e-3
+
 class ConvexOptimizationV1(gym.Env):
     """
     Represents convex function optimization task process.
@@ -45,30 +48,27 @@ class ConvexOptimizationV1(gym.Env):
         self.render_mode = render_mode
 
         # The count of function in_features 
-        self.in_features = in_features
-        self.tol = 0.001
-        self.max_iterations = 10000
-        self.add_noise = add_noise
+        self._in_features = in_features
+        self._tol = 0.001
+        self._max_iterations = 10000
+        self._add_noise = add_noise
 
         # Set a box approximately where the minimum value is located
-        self.max_absolute_value = max_absolute_value
-
-        # Using x = (0,0,...,0) as "uninitialized" state
-        self._x = np.zeros(shape=self.in_features)
+        self._max_absolute_value = max_absolute_value
 
         # Convex positive-semidefinite function f(x) for optimization 
         self._function = None
 
         self.observation_space = spaces.Dict({
-            "l1_grad_norm" : spaces.Box(low=0.0, high=np.inf, shape=(1,), dtype=np.float32),  
-            "l2_grad_norm" : spaces.Box(low=0.0, high=np.inf, shape=(1,), dtype=np.float32),
-            "l2_grad_norm_log" : spaces.Box(low=0.0, high=np.inf, shape=(1,), dtype=np.float32),  
+            "grad_norm_scaled_log" : spaces.Box(low=0.0, high=10.0, shape=(1,), dtype=np.float32),  
+            "grad_delta_norm_scaled_log" : spaces.Box(low=0.0, high=10.0, shape=(1,), dtype=np.float32),
             "cos_sim" : spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32), 
-            "grad_delta_norm" : spaces.Box(low=0.0, high=np.inf, shape=(1,), dtype=np.float32),
-            "function_value_delta_log" : spaces.Box(low=-100, high=100, shape=(1,), dtype=np.float32)
+            "loss_scaled_log" : spaces.Box(low=0.0, high=10.0, shape=(1,), dtype=np.float32),
+            "loss_delta_scaled_log" : spaces.Box(low=-10.0, high=10.0, shape=(1,), dtype=np.float32),
+            "prev_action" : spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32)
         })
 
-        # We are choosing normalized learning rate in logarithmic scale
+        # We are choosing learning rate in logarithmic scale
         self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32)
 
     def reset(self, seed: Optional[int] = None, options = None):
@@ -81,121 +81,44 @@ class ConvexOptimizationV1(gym.Env):
 
         self._iteration = 0
 
-
-        if self.add_noise == True:
-            self._function = ConvexFunctionWithNoise(in_features=self.in_features, 
+        if self._add_noise == True:
+            self._function = ConvexFunctionWithNoise(in_features=self._in_features, 
                                         random_state=obj_seed, 
-                                        max_absolute_value=self.max_absolute_value)
+                                        max_absolute_value=self._max_absolute_value)
         else:
-            self._function = ConvexFunction(in_features=self.in_features, 
+            self._function = ConvexFunction(in_features=self._in_features, 
                                         random_state=obj_seed, 
-                                        max_absolute_value=self.max_absolute_value)
+                                        max_absolute_value=self._max_absolute_value)
         
-        
-        self._x = self.np_random.uniform(low = -self.max_absolute_value, high=self.max_absolute_value, size=(self.in_features,))
-        self._x0 = self._x.copy()
-        self._grad = self._function.get_gradient(self._x)
-        self._function_value = self._function(self._x)
-        self._grad_delta_norm = 0.0
+        self._init_values()
 
-        l1_grad_norm_val = np.linalg.norm(self._grad, ord=1)
-        l2_grad_norm_val = np.linalg.norm(self._grad)
-
-        # Using 1e6 * grad_norm as norm cliping threshhold
-        self.l1_norm_clip = max(1e6 * l1_grad_norm_val, 1.0)
-        self.l2_norm_clip = max(1e6 * l2_grad_norm_val, 1.0)
-
-        self._grad_norm = l2_grad_norm_val
-
-        observation = {
-            "l1_grad_norm": np.array([l1_grad_norm_val], dtype=np.float32),
-            "l2_grad_norm": np.array([l2_grad_norm_val], dtype=np.float32),
-            "l2_grad_norm_log" : np.array([np.log1p(l2_grad_norm_val)], dtype=np.float32),
-            "cos_sim" : np.array([0.0], dtype=np.float32),
-            "grad_delta_norm": np.array([0.0], dtype=np.float32),
-            "function_value_delta_log": np.array([0.0], dtype=np.float32),
-        }
-
-        info = {
-            "iteration" :   self._iteration,
-            "function_value" : self._function_value,
-            "grad_norm" : self._grad_norm, 
-            "grad_delta_norm" : self._grad_delta_norm,
-            "x" : self._x
-        }
+        observation = self._get_obs()
+        info = self._get_info()
 
         return observation, info
 
     def step(self, action : np.ndarray):
         self._iteration += 1
-
+        
         lr = 10**(action[0] * 3 - 2)
 
-        prev_x = self._x.copy()
-        prev_grad = self._grad.copy()
-        prev_function_value = self._function_value
+        self._prev_action = action[0]
 
-        self._x = prev_x - lr * prev_grad
-        self._grad = self._function.get_gradient(self._x)
-        self._function_value = self._function(self._x)
-        self._grad_delta_norm = np.linalg.norm(self._grad - prev_grad)
+        prev_x = self._curr_x.copy()
+        self._curr_x = prev_x - lr * self._curr_grad
 
-        l2_grad_norm_prev = np.linalg.norm(prev_grad)
-        l2_grad_norm_curr = np.linalg.norm(self._grad)
+        self._update_values()
 
-        eps = 1e-8
+        observation = self._get_obs()
+        info = self._get_info()
 
-        reward = float(np.log2(prev_function_value + eps) - np.log2(self._function_value + eps))
+        reward = float(np.log2(self._prev_loss + EPS) - np.log2(self._curr_loss + EPS))
         reward = np.clip(reward, -5.0, 5.0)
 
-        # Calculating obserbation features
 
-        l1_grad_norm = np.clip(np.linalg.norm(self._grad, ord = 1), 0, self.l1_norm_clip)
-        l2_grad_norm = np.clip(l2_grad_norm_curr, 0, self.l2_norm_clip)
-        l2_grad_norm_log = np.log1p(l2_grad_norm)
-
-        if l2_grad_norm_prev > 1e-12 and l2_grad_norm_curr > 1e-12:
-            grad_unit = self._grad / l2_grad_norm_curr
-            prev_grad_unit = prev_grad / l2_grad_norm_prev
-
-            cos_sim = np.dot(grad_unit, prev_grad_unit)
-            cos_sim = np.clip(cos_sim, -1.0, 1.0)
-        else:
-            cos_sim = 0.0
-
-        grad_delta_norm = np.clip(self._grad_delta_norm, 0, self.l2_norm_clip)
-        function_value_delta = self._function_value - prev_function_value
-        function_value_delta_log = np.clip(np.sign(function_value_delta) * np.log1p(np.abs(function_value_delta)), -100.0, 100.0)
-
-        observation = {
-            "l1_grad_norm": np.array([l1_grad_norm], dtype=np.float32),
-            "l2_grad_norm": np.array([l2_grad_norm], dtype=np.float32),
-            "l2_grad_norm_log" : np.array([l2_grad_norm_log], dtype=np.float32),
-            "cos_sim" :  np.array([cos_sim], dtype=np.float32),
-            "grad_delta_norm" : np.array([grad_delta_norm], dtype=np.float32),
-            "function_value_delta_log" : np.array([function_value_delta_log], dtype=np.float32),
-        }
-
-        info = {
-            "iteration" : self._iteration,
-            "function_value" : self._function_value,
-            "grad_norm" : l2_grad_norm, 
-            "grad_delta_norm" : self._grad_delta_norm,
-            "x" : self._x,
-            "status" : ""
-        }
-
-        self._grad_norm = l2_grad_norm
-
-        is_non_finite = (
-            not np.isfinite(self._grad).all()
-            or not np.isfinite(self._function_value)
-        )
-        is_exploding = (l2_grad_norm_curr / (l2_grad_norm_prev + eps)) > 1e3
-
-        diverged   = bool(is_non_finite or is_exploding)
-        converged  = bool(self._grad_norm < self.tol)
-        truncated  = bool(self._iteration >= self.max_iterations)
+        diverged   = bool(self._is_exploding)
+        converged  = bool(self._curr_grad_norm < self._tol)
+        truncated  = bool(self._iteration >= self._max_iterations)
 
         if diverged:
             reward += -100.0
@@ -214,21 +137,183 @@ class ConvexOptimizationV1(gym.Env):
         if self.render_mode == "ansi":
             render_string = (
                 f"\n--- Iteration {self._iteration} ---\n"
-                f"Function Value: {self._function_value:.6f}\n"
-                f"Gradient Norm:  {np.linalg.norm(self._grad):.6f}\n"
+                f"Function Value: {self._curr_loss:.6f}\n"
+                f"Gradient Norm:  {self._curr_grad_norm:.6f}\n"
                 f"A: {self._function.A}\n"
                 f"b: {self._function.b}\n"
                 f"c: {self._function.c}\n"
-                f"X start: {self._x0}\n"
-                f"X best: {self._x}\n"
+                f"X start: {self._start_x}\n"
+                f"X best: {self._curr_x}\n"
             )
             return render_string
 
     def close(self):
         pass
-
+    
     def get_x_start(self):
-        return self._x0.copy()
+        return self._start_x.copy()
     
     def get_function(self):
         return self._function
+
+    def _get_obs(self):
+        grad_norm_scaled_log = np.log1p(
+            self._curr_grad_norm / (self._ema_grad_norm + EPS)
+        )
+
+        grad_delta_norm_scaled_log = np.log1p(
+            self._curr_grad_delta_norm / (self._ema_grad_delta_norm + EPS)
+        )
+
+        cos_sim = self._calculate_cos_sim()
+
+        loss_scaled_log = np.log1p(
+            self._curr_loss / (self._ema_loss + EPS)
+        )
+
+        abs_delta = abs(self._curr_loss_delta)
+        sign = np.sign(self._curr_loss_delta)
+        loss_delta_scaled_log = sign * np.log1p(
+            abs_delta / (self._ema_loss_delta + EPS)
+        )
+
+        self._obs = {
+            "grad_norm_scaled_log"      : np.array([grad_norm_scaled_log],       dtype=np.float32),
+            "grad_delta_norm_scaled_log": np.array([grad_delta_norm_scaled_log], dtype=np.float32),
+            "cos_sim"                   : np.array([cos_sim],                    dtype=np.float32),
+            "loss_scaled_log"           : np.array([loss_scaled_log],            dtype=np.float32),
+            "loss_delta_scaled_log"     : np.array([loss_delta_scaled_log],      dtype=np.float32),
+            "prev_action"               : np.array([self._prev_action],          dtype=np.float32),
+        }
+
+        return self._obs
+
+    def _get_info(self):
+        return {
+            "iteration"       : self._iteration,
+            "loss"            : self._curr_loss,
+            "grad_norm"       : self._curr_grad_norm, 
+            "grad_delta_norm" : self._curr_grad_delta_norm,
+            "x"               : self._curr_x,
+            "status"          : "",
+        }
+
+    def _init_values(self):
+        self._curr_x = self.np_random.uniform(low = -self._max_absolute_value, high=self._max_absolute_value, size=(self._in_features,))
+        self._start_x = self._curr_x.copy()
+        self._curr_grad = self._function.get_gradient(self._curr_x )
+        self._prev_grad = None
+
+        self._grad_norm_clip = None
+
+        self._curr_grad_norm = np.linalg.norm(self._curr_grad)
+        self._ema_grad_norm = self._curr_grad_norm
+        self._prev_grad_norm = None
+
+        self._curr_grad_delta_norm = 0.0
+        self._ema_grad_delta_norm = EPS
+        self._prev_grad_delta_norm = None
+
+        self._curr_loss = self._function(self._curr_x )
+        self._ema_loss = self._curr_loss
+        self._prev_loss = None
+
+        self._curr_loss_delta = 0.0
+        self._ema_loss_delta = EPS
+        self._prev_loss_delta = None
+
+        self._prev_action = 0.0
+
+    def _update_values(self):
+        # Updating gradients
+        self._prev_grad = self._curr_grad.copy()
+        self._curr_grad = self._function.get_gradient(self._curr_x)
+
+        # ---- GRAD NORM ----
+        curr_grad_norm = np.linalg.norm(self._curr_grad)
+        curr_grad_norm_isfinite = np.isfinite(curr_grad_norm)
+        
+        if curr_grad_norm_isfinite and self._grad_norm_clip is None:
+            self._grad_norm_clip = max(1e6 * curr_grad_norm, 1.0)
+
+        if not curr_grad_norm_isfinite:
+            curr_grad_norm = self._grad_norm_clip if self._grad_norm_clip is not None else 0.0
+        else:
+            if self._grad_norm_clip is not None:
+                curr_grad_norm = min(curr_grad_norm, self._grad_norm_clip)
+
+        self._ema_grad_norm = ALPHA * self._curr_grad_norm + (1 - ALPHA) * self._ema_grad_norm
+        self._prev_grad_norm = self._curr_grad_norm
+        self._curr_grad_norm = curr_grad_norm
+
+        # ---- GRAD DELTA NORM----
+        if self._prev_grad is not None:
+            prev_valid = np.all(np.isfinite(self._prev_grad))
+            curr_valid = curr_grad_norm_isfinite
+
+            if prev_valid and curr_valid:
+                grad_delta_norm = np.linalg.norm(self._curr_grad - self._prev_grad)
+                if not np.isfinite(grad_delta_norm):
+                    grad_delta_norm = self._grad_norm_clip if self._grad_norm_clip is not None else 0.0
+                elif self._grad_norm_clip is not None:
+                    grad_delta_norm = min(grad_delta_norm, self._grad_norm_clip)
+            else:
+                grad_delta_norm = 0.0
+        else:
+            grad_delta_norm = 0.0
+
+
+        self._ema_grad_delta_norm = ALPHA * self._curr_grad_delta_norm + (1 - ALPHA) * self._ema_grad_delta_norm
+        self._prev_grad_delta_norm = self._curr_grad_delta_norm
+        self._curr_grad_delta_norm = grad_delta_norm
+
+        # ---- LOSS ----
+        self._prev_loss = self._curr_loss
+        self._ema_loss = ALPHA * self._curr_loss + (1 - ALPHA) * self._ema_loss
+        self._curr_loss = self._function(self._curr_x)
+
+        if not np.isfinite(self._curr_loss):
+            self._curr_loss = self._prev_loss
+
+        # ---- LOSS DELTA ----
+        if self._prev_loss is not None:
+            loss_delta = self._curr_loss - self._prev_loss
+            if not np.isfinite(loss_delta):
+                loss_delta = 0.0
+        else:
+            loss_delta = 0.0
+
+        self._ema_loss_delta = ALPHA * abs(self._curr_loss_delta) + (1 - ALPHA) * self._ema_loss_delta
+        self._prev_loss_delta = self._curr_loss_delta
+        self._curr_loss_delta = loss_delta
+
+        # ---- EXPLODING ----
+        self._is_exploding = (
+            np.isfinite(self._curr_grad_norm)
+            and np.isfinite(self._prev_grad_norm)
+            and self._prev_grad_norm > EPS
+            and (self._curr_grad_norm / self._prev_grad_norm) > 1e3
+        )
+
+    def _calculate_cos_sim(self):
+        if self._prev_grad is None or self._prev_grad.shape != self._curr_grad.shape:
+            return 0.0
+
+        if not np.all(np.isfinite(self._curr_grad)):
+            return 0.0
+
+        if not np.all(np.isfinite(self._prev_grad)):
+            return 0.0
+
+        if self._curr_grad_norm <= 1e-12 or self._prev_grad_norm <= 1e-12:
+            return 0.0
+        
+        grad_unit = self._curr_grad / self._curr_grad_norm
+        prev_grad_unit = self._prev_grad / self._prev_grad_norm
+        
+        cos_sim = np.dot(grad_unit, prev_grad_unit)
+        
+        if not np.isfinite(cos_sim):
+            return 0.0
+        
+        return float(np.clip(cos_sim, -1.0, 1.0))
