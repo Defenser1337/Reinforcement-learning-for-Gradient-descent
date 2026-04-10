@@ -12,7 +12,7 @@ config = {
     2 : {
             "timesteps": 1_000_000, 
             "n_envs": 32, 
-            "batch_size": 1024,  
+            "batch_size": 256,  
             "policy_kwargs": {
                 "net_arch": dict(pi=[512, 512], vf=[512, 512])
             }
@@ -20,7 +20,7 @@ config = {
 }
 
 vec_env = make_vec_env(
-    "convex_optimization_env/ConvexOptimization-v0", 
+    "convex_optimization_env/ConvexOptimization-v1", 
     n_envs=config[dim]["n_envs"],
     env_kwargs={
         "in_features": dim,
