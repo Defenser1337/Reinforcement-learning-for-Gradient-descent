@@ -6,7 +6,7 @@ from src.optimization.optimization_functions.convex_function import ConvexFuncti
 from src.optimization.optimization_functions.convex_function_w_noise import ConvexFunctionWithNoise
 
 EPS = 1e-8
-ALPHA = 1e-3
+ALPHA = 0.01
 
 class ConvexOptimizationV1(gym.Env):
     """
@@ -44,13 +44,13 @@ class ConvexOptimizationV1(gym.Env):
 
     metadata = {"render_modes": ["ansi"]}
 
-    def __init__(self, in_features : int = 1, render_mode = None, max_absolute_value : np.float32 = 1.0, add_noise = False):
+    def __init__(self, in_features : int = 1, render_mode = None, max_absolute_value : np.float32 = 1.0, add_noise = False, max_iterations = 1000):
         self.render_mode = render_mode
 
         # The count of function in_features 
         self._in_features = in_features
         self._tol = 0.001
-        self._max_iterations = 10000
+        self._max_iterations = max_iterations
         self._add_noise = add_noise
 
         # Set a box approximately where the minimum value is located
@@ -63,9 +63,9 @@ class ConvexOptimizationV1(gym.Env):
             "grad_norm_scaled_log" : spaces.Box(low=0.0, high=100.0, shape=(1,), dtype=np.float32),  
             "grad_delta_norm_scaled_log" : spaces.Box(low=0.0, high=100.0, shape=(1,), dtype=np.float32),
             "cos_sim" : spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32), 
-            "loss_scaled_log" : spaces.Box(low=0.0, high=100.0, shape=(1,), dtype=np.float32),
+        #    "loss_scaled_log" : spaces.Box(low=0.0, high=100.0, shape=(1,), dtype=np.float32),
             "loss_delta_scaled_log" : spaces.Box(low=-100.0, high=100.0, shape=(1,), dtype=np.float32),
-            "prev_action" : spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32)
+            "prev_action" : spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32),
         })
 
         # We are choosing learning rate in logarithmic scale
@@ -100,7 +100,7 @@ class ConvexOptimizationV1(gym.Env):
     def step(self, action : np.ndarray):
         self._iteration += 1
         
-        lr = 10**(action[0] * 3 - 2)
+        lr = 10**(action[0] * 3 - 3)
 
         self._prev_action = action[0]
 
@@ -112,20 +112,22 @@ class ConvexOptimizationV1(gym.Env):
         observation = self._get_obs()
         info = self._get_info()
 
-        reward = float(np.log2(self._prev_loss + EPS) - np.log2(self._curr_loss + EPS))
-        reward = np.clip(reward, -5.0, 5.0)
+        prev_loss_scaled = self._prev_loss /(self._ema_loss + EPS)
+        curr_loss_scaled = self._curr_loss / (self._ema_loss + EPS)
 
+        reward = float(np.log2(prev_loss_scaled + EPS) - np.log2(curr_loss_scaled + EPS))
+        reward = np.clip(reward, -5.0, 5.0)
 
         diverged   = bool(self._is_exploding)
         converged  = bool(self._curr_grad_norm < self._tol)
         truncated  = bool(self._iteration >= self._max_iterations)
 
         if diverged:
-            reward += -100.0
+            reward += -10.0
             terminated = True
             info["status"] = "diverged"
-        elif converged:
-            reward += 100.0
+        elif converged and self._add_noise == False:
+            reward += 10.0
             terminated = True
             info["status"] = "converged"
         else:
@@ -181,7 +183,7 @@ class ConvexOptimizationV1(gym.Env):
             "grad_norm_scaled_log"      : np.array([grad_norm_scaled_log],       dtype=np.float32),
             "grad_delta_norm_scaled_log": np.array([grad_delta_norm_scaled_log], dtype=np.float32),
             "cos_sim"                   : np.array([cos_sim],                    dtype=np.float32),
-            "loss_scaled_log"           : np.array([loss_scaled_log],            dtype=np.float32),
+            #"loss_scaled_log"           : np.array([loss_scaled_log],            dtype=np.float32),
             "loss_delta_scaled_log"     : np.array([loss_delta_scaled_log],      dtype=np.float32),
             "prev_action"               : np.array([self._prev_action],          dtype=np.float32),
         }
