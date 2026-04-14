@@ -15,23 +15,27 @@ from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import VecNormalize
 
 
-def get_env_config(seed, in_features, max_iterations, add_noise):
+def get_env_config(seed, in_features, max_iterations, env_id, env_kwargs):
+    base_kwargs = {
+        "render_mode": "ansi", 
+        "in_features": in_features,
+        "max_iterations": max_iterations
+    }
+
+    if env_kwargs:
+        base_kwargs.update(env_kwargs)
+
     return {
-        "env_id" : "convex_optimization_env/ConvexOptimization-v1",
-        "n_envs" : 1,
-        "seed" : seed,
-        "env_kwargs": {
-            "render_mode": "ansi", 
-            "in_features": in_features,
-            "add_noise" : add_noise,
-            "max_iterations" : max_iterations
-        }
+        "env_id": env_id,
+        "n_envs": 1,
+        "seed": seed,
+        "env_kwargs": base_kwargs
     }
 
 def get_model_dir(stats, model):
     return {
-        "stats" : "../models/2d_convex_optimization_vec_normalize_stats.pkl",
-        "model" : "../models/2d_convex_optimization"
+        "stats" : stats,
+        "model" : model
     }
 
 def optimize_exp(env_config, model_dir):

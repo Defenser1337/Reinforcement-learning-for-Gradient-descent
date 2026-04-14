@@ -11,9 +11,9 @@ dim = 2
 
 config = {
     2 : {
-        "timesteps": 100_000, 
+        "timesteps": 250_000, 
         "n_envs": 32,
-        "n_steps" : 1024
+        "n_steps" : 2048
     }
 }
 
@@ -22,7 +22,7 @@ vec_env = make_vec_env(
     n_envs=config[dim]["n_envs"],
     env_kwargs={
         "in_features": dim,
-        "max_iterations" : 5000,
+        "max_iterations" : 1000,
     }
 )
 

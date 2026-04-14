@@ -5,7 +5,7 @@ from typing import Optional
 from src.optimization.optimization_functions.convex_function_w_noise import ConvexFunctionWithNoise
 
 EPS = 1e-8
-ALPHA = 0.01
+ALPHA = 0.1
 
 class NonConvexOptimizationV0(gym.Env):
     """
@@ -39,13 +39,15 @@ class NonConvexOptimizationV0(gym.Env):
 
     metadata = {"render_modes": ["ansi"]}
 
-    def __init__(self, in_features : int = 1, render_mode = None, max_absolute_value : np.float32 = 1.0, max_iterations = 1000):
+    def __init__(self, in_features : int = 1, render_mode = None, max_absolute_value : np.float32 = 1.0, max_iterations = 1000, amplitude = None, frequency = None):
         self.render_mode = render_mode
 
         # The count of function in_features 
         self._in_features = in_features
         self._tol = 0.001
         self._max_iterations = max_iterations
+        self._amplitude = amplitude
+        self._frequency = frequency
 
         # Set a box approximately where the minimum value is located
         self._max_absolute_value = max_absolute_value
@@ -76,7 +78,9 @@ class NonConvexOptimizationV0(gym.Env):
         self._iteration = 0
 
         self._function = ConvexFunctionWithNoise(in_features=self._in_features, 
-                                                 random_state=obj_seed)
+                                                 random_state=obj_seed,
+                                                 amplitude=self._amplitude,
+                                                 frequency=self._frequency)
         
         self._init_values()
 
@@ -88,7 +92,7 @@ class NonConvexOptimizationV0(gym.Env):
     def step(self, action : np.ndarray):
         self._iteration += 1
         
-        lr = 10**(action[0] * 3 - 2)
+        lr = 10**(action[0] * 2 - 3)
 
         self._prev_action = action[0]
 
@@ -276,12 +280,12 @@ class NonConvexOptimizationV0(gym.Env):
         self._curr_loss_delta = loss_delta
 
         # ---- EXPLODING ----
-        self._is_exploding = (
-            np.isfinite(self._curr_grad_norm)
-            and np.isfinite(self._prev_grad_norm)
-            and self._prev_grad_norm > EPS
-            and (self._curr_grad_norm / self._prev_grad_norm) > 1e3
-        )
+        # Если это НЕ конечное число — это 100% взрыв
+        if not np.isfinite(self._curr_grad_norm) or not np.isfinite(self._curr_loss):
+            self._is_exploding = True
+        else:
+            # Дополнительные проверки на аномальный рост
+            self._is_exploding = self._curr_grad_norm > self._prev_grad_norm * 1e3
 
     def _calculate_cos_sim(self):
         if self._prev_grad is None or self._prev_grad.shape != self._curr_grad.shape:

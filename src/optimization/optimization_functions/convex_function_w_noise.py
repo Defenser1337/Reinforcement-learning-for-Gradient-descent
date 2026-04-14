@@ -20,7 +20,9 @@ class ConvexFunctionWithNoise(Function):
     def __init__ (self, in_features : int,
                   random_state : Optional[int] = None,
                   max_absolute_value : float = 1.0,
-                  tol: float = 1e-10) -> None:
+                  tol: float = 1e-10,
+                  amplitude = None,
+                  frequency = None,) -> None:
         super().__init__(in_features)
         self._tol = tol
         self._max_absolute_value = max_absolute_value
@@ -28,8 +30,17 @@ class ConvexFunctionWithNoise(Function):
 
         self._rng = get_rng(seed=random_state, location_name="convex_function_with_noise_class")
 
-        self._amplitude = self._rng.uniform(0.5, 5)
-        self._frequency = self._rng.uniform(3, 10)
+
+        if amplitude == None:
+            self._amplitude = self._rng.uniform(0.1, 1.5)
+        else:
+            self._amplitude = amplitude
+
+        if amplitude == None:
+            self._frequency = self._rng.uniform(3, 20)
+        else:
+            self._frequency = frequency
+
 
         self._convex_function_seed = self._rng.integers(0, 2**31 - 1)
 
