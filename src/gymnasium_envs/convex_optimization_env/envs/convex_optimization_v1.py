@@ -6,7 +6,7 @@ from src.optimization.optimization_functions.convex_function import ConvexFuncti
 from src.optimization.optimization_functions.convex_function_w_noise import ConvexFunctionWithNoise
 
 EPS = 1e-8
-ALPHA = 1e-3
+ALPHA = 0.01
 
 class ConvexOptimizationV1(gym.Env):
     """
@@ -65,7 +65,7 @@ class ConvexOptimizationV1(gym.Env):
             "cos_sim" : spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32), 
             "loss_scaled_log" : spaces.Box(low=0.0, high=100.0, shape=(1,), dtype=np.float32),
             "loss_delta_scaled_log" : spaces.Box(low=-100.0, high=100.0, shape=(1,), dtype=np.float32),
-            "prev_action" : spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32)
+            "prev_action" : spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32),
         })
 
         # We are choosing learning rate in logarithmic scale

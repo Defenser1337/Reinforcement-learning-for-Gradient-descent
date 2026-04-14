@@ -10,7 +10,7 @@ dim = 2
 
 config = {
     "timesteps": 10_000, 
-    "n_envs": 14,
+    "n_envs": 32,
 }
 
 vec_env = make_vec_env(
@@ -22,6 +22,8 @@ vec_env = make_vec_env(
 
 vec_env = VecNormalize(
     vec_env, 
+    norm_obs=True,
+    norm_reward=True,
     clip_obs=10.0
 )
 

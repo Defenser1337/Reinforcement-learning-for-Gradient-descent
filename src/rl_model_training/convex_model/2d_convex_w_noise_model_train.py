@@ -11,14 +11,9 @@ dim = 2
 
 config = {
     2 : {
-            "timesteps": 1_000_000, 
-            "n_envs": 32,
-            "n_steps" : 256, 
-            "policy_kwargs": {
-                "net_arch": dict(pi=[256, 256], vf=[256, 256]),
-                "activation_fn": nn.Tanh
-            }
-        }
+        "timesteps": 100_000, 
+        "n_envs": 32
+    }
 }
 
 vec_env = make_vec_env(
@@ -27,7 +22,8 @@ vec_env = make_vec_env(
     env_kwargs={
         "in_features": dim,
         "add_noise" : True
-    })
+    }
+)
 
 vec_env = VecNormalize(
     vec_env, 
@@ -40,10 +36,7 @@ model = PPO(
     "MultiInputPolicy",
     vec_env,
     verbose=1,
-    n_steps=config[dim]["n_steps"],
     tensorboard_log=f"{log_dir}/{dim}d/",
-    policy_kwargs=config[dim]["policy_kwargs"],
-    learning_rate=lambda remaining: 3e-4 * remaining,
     device="cuda"
 )
 
