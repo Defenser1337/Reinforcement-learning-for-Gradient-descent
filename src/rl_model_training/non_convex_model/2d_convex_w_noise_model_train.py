@@ -2,7 +2,7 @@ import gymnasium as gym
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import VecNormalize
-import src.gymnasium_envs.convex_optimization_env
+import src.gymnasium_envs.non_convex_optimization_env
 from torch import nn
 
 log_dir = "logs"
@@ -12,16 +12,17 @@ dim = 2
 config = {
     2 : {
         "timesteps": 100_000, 
-        "n_envs": 32
+        "n_envs": 32,
+        "n_steps" : 1024
     }
 }
 
 vec_env = make_vec_env(
-    "convex_optimization_env/ConvexOptimization-v1", 
+    "non_convex_optimization_env/NonConvexOptimization-v0", 
     n_envs=config[dim]["n_envs"],
     env_kwargs={
         "in_features": dim,
-        "add_noise" : True
+        "max_iterations" : 5000,
     }
 )
 
@@ -36,11 +37,12 @@ model = PPO(
     "MultiInputPolicy",
     vec_env,
     verbose=1,
-    tensorboard_log=f"{log_dir}/{dim}d/",
+    n_steps=config[dim]["n_steps"],
+    tensorboard_log=f"{log_dir}/noisy/{dim}d/",
     device="cuda"
 )
 
 model.learn(total_timesteps=config[dim]["timesteps"])
 
-model.save(f"{model_dir}/{dim}d_convex_w_noise_optimization")
-vec_env.save(f"{model_dir}/{dim}d_convex_w_noise_optimization_vec_normalize_stats.pkl")
+model.save(f"{model_dir}/{dim}d_noise_convex_optimization")
+vec_env.save(f"{model_dir}/{dim}d_noise_convex_optimization_vec_normalize_stats.pkl")
