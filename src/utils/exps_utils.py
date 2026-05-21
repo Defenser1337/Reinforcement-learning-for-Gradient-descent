@@ -102,16 +102,16 @@ def make_standard_method_exp(function, x0, max_iterations) -> tuple[list, list]:
 
     return gd_info, adam_info
 
-def plot_converging_comparasion(result : dict, dim : int):
+def plot_converging_comparasion(result : dict, dim : int, title = "_blank_name_"):
     plt.figure(figsize=(10, 6))
     sns.set_style("whitegrid")
 
     for name, values in result.items():
         sns.lineplot(x=values[0], y=values[1], label=name)
 
-    plt.title(f'Convex optimization task (n_features={dim}): ADAM vs GD vs GD with adaptive LR (log-scale)')
+    plt.title(title)
     plt.xlabel('Iteration')
-    plt.ylabel('Loss (log-scale)')
+    plt.ylabel('Loss')
     plt.legend()    
     plt.yscale('log')
     plt.show()
