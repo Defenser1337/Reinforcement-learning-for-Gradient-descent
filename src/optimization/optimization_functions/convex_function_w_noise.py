@@ -46,6 +46,7 @@ class ConvexFunctionWithNoise(Function):
         self._convex_function = ConvexFunction(in_features=in_features, scale=scale, seed=convex_seed)
 
         super().__init__(in_features=self._convex_function.in_features)
+        self._scale = self._convex_function.scale
 
         self._phases = self._rng.uniform(0, 2 * np.pi, size=self.in_features)
 
@@ -76,6 +77,10 @@ class ConvexFunctionWithNoise(Function):
     @property
     def seed(self):
         return self._seed
+    
+    @property
+    def scale(self):
+        return self._scale
 
     @property
     def convex_function(self):
