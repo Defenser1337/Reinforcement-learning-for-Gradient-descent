@@ -3,6 +3,9 @@ from typing import NamedTuple, Optional, List
 from src.optimization.optimization_functions.function import Function
 from src.utils.prng import get_rng
 
+OPT_POINT_BOX_LOWER_BOUND = -5
+OPT_POINT_BOX_UPPER_BOUND = 5
+
 class OptimizeResult(NamedTuple):
     iteration_count: int
     x_start : np.ndarray
@@ -42,11 +45,10 @@ def gradient_descent_optimizer(function : Function,
             1 : gradient converged
     """
     in_features = function.in_features
-    max_absolute_value = function.max_absolute_value
 
     if x0 is None and random_state is not None:
         rng = get_rng(seed=random_state, location_name="gd_optimizer_function")
-        x0 = max_absolute_value * rng.uniform(-1, 1, size = in_features)
+        x0 = rng.uniform(OPT_POINT_BOX_LOWER_BOUND, OPT_POINT_BOX_UPPER_BOUND, size = in_features)
         prev_x = x0.copy()
     elif x0 is not None and random_state is None:
         if x0.ndim != 1 or x0.shape[0] != in_features:
@@ -190,11 +192,10 @@ def adam_optimizer(function : Function,
             1 : gradient converged
     """
     in_features = function.in_features
-    max_absolute_value = function.max_absolute_value
 
     if x0 is None and random_state is not None:
         rng = get_rng(seed=random_state, location_name="adam_optimizer_function")
-        x0 = max_absolute_value * rng.uniform(-1, 1, size = in_features)
+        x0 = rng.uniform(OPT_POINT_BOX_LOWER_BOUND, OPT_POINT_BOX_UPPER_BOUND, size = in_features)
         prev_x = x0.copy()
     elif x0 is not None and random_state is None:
         if x0.ndim != 1 or x0.shape[0] != in_features:
