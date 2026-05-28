@@ -208,3 +208,15 @@ __marimo__/
 
 # Visual Studio Code
 .vscode
+
+# Sb3 trained models
+
+models/
+
+# Tensorboard logs
+
+logs/
+
+# Datasets
+
+**/data/
