@@ -4,6 +4,13 @@ import numpy as np
 from typing import Optional
 from src.optimization.optimization_functions.convex_function import ConvexFunction
 from src.optimization.optimization_functions.convex_function_w_noise import ConvexFunctionWithNoise
+from src.optimization.optimization_functions.convex_function import (
+    OPT_POINT_BOX_LOWER_BOUND,  # -5
+    OPT_POINT_BOX_UPPER_BOUND,  # 5
+    IN_FEATURES_LOWER_BOUND, # 1
+    IN_FEATURES_UPPER_BOUND # 100
+)
+from src.utils.prng import get_rng
 
 EPS = 1e-8
 ALPHA = 0.01
@@ -37,24 +44,25 @@ class ConvexOptimizationV1(gym.Env):
         lr: normalized learning rate in logarithmic scale in the bound [-1, 1]
         
     Parameters:
-        in_features (int): dimension of optimization task
         render_mode: Only accept "ansi" and None type
-        max_absolute_value (float): set a box approximately where the minimum value is located
+        in_features (int, None): dimension of optimization task (None means optimizer will be learned on task with random dimension)
+        max_iterations (int): maximum number of iterations
+        add_time_penalty (bool) : adds a time penalty to the reward function
     """
 
     metadata = {"render_modes": ["ansi"]}
 
-    def __init__(self, in_features : int = 1, render_mode = None, max_absolute_value : np.float32 = 1.0, add_noise = False, max_iterations = 1000):
+    def __init__(self, 
+                 render_mode = None, 
+                 in_features : int = None, 
+                 max_iterations : int = 1000,
+                 add_time_penalty : bool = False):
         self.render_mode = render_mode
 
-        # The count of function in_features 
-        self._in_features = in_features
+        self._in_features_global = in_features
         self._tol = 0.001
-        self._add_noise = add_noise
         self._max_iterations = max_iterations
-
-        # Set a box approximately where the minimum value is located
-        self._max_absolute_value = max_absolute_value
+        self._add_time_penalty = add_time_penalty
 
         # Convex positive-semidefinite function f(x) for optimization 
         self._function = None
@@ -74,21 +82,15 @@ class ConvexOptimizationV1(gym.Env):
     def reset(self, seed: Optional[int] = None, options = None):
         super().reset(seed=seed)
 
-        if seed is not None:
-            obj_seed = seed
-        else:
-            obj_seed = int(self.np_random.integers(low=0, high=2**31 - 1))
+        rng = get_rng(seed=seed, location_name="convex_optimization_env_v1")
+
+        self._obj_seed = rng.integers(low=0, high=2**31 - 1)
+        self._in_features = rng.integers(low=IN_FEATURES_LOWER_BOUND, high=IN_FEATURES_UPPER_BOUND) if self._in_features_global is None else self._in_features_global
 
         self._iteration = 0
 
-        if self._add_noise == True:
-            self._function = ConvexFunctionWithNoise(in_features=self._in_features, 
-                                        random_state=obj_seed, 
-                                        max_absolute_value=self._max_absolute_value)
-        else:
-            self._function = ConvexFunction(in_features=self._in_features, 
-                                        random_state=obj_seed, 
-                                        max_absolute_value=self._max_absolute_value)
+        self._function = ConvexFunction(in_features=self._in_features, 
+                                        seed=self._obj_seed)
         
         self._init_values()
 
@@ -115,17 +117,20 @@ class ConvexOptimizationV1(gym.Env):
         reward = float(np.log2(self._prev_loss + EPS) - np.log2(self._curr_loss + EPS))
         reward = np.clip(reward, -5.0, 5.0)
 
+        if self._add_time_penalty is True:
+            time_penalty = self._iteration / self._max_iterations  # [0, 1]
+            reward -= 0.1 * time_penalty
 
         diverged   = bool(self._is_exploding)
         converged  = bool(self._curr_grad_norm < self._tol)
         truncated  = bool(self._iteration >= self._max_iterations)
 
         if diverged:
-            reward += -100.0
+            reward += -10.0
             terminated = True
             info["status"] = "diverged"
         elif converged:
-            reward += 100.0
+            reward += 10.0
             terminated = True
             info["status"] = "converged"
         else:
@@ -199,7 +204,11 @@ class ConvexOptimizationV1(gym.Env):
         }
 
     def _init_values(self):
-        self._curr_x = self.np_random.uniform(low = -self._max_absolute_value, high=self._max_absolute_value, size=(self._in_features,))
+        self._curr_x = self.np_random.uniform(
+            low=OPT_POINT_BOX_LOWER_BOUND, 
+            high=OPT_POINT_BOX_UPPER_BOUND, 
+            size=(self._in_features,)
+        )
         self._start_x = self._curr_x.copy()
         self._curr_grad = self._function.get_gradient(self._curr_x )
         self._prev_grad = None
