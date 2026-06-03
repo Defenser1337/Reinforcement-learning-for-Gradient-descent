@@ -14,6 +14,8 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import VecNormalize
 
+from src.utils.prng import get_rng
+
 
 def get_env_config(seed, in_features, max_iterations, env_id, env_kwargs):
     base_kwargs = {
@@ -38,22 +40,30 @@ def get_model_dir(stats, model):
         "model" : model
     }
 
-def optimize_exp(env_config, model_dir):
-    rl_gd_info, function, x0 = make_rl_method_exp(env_config, model_dir)
+def optimize_exp_standart(method = "GD", x0 = None, function = None, env_config = None):
+    if method not in ["GD", "ADAM"]:
+        raise ValueError("Only ADAM and GD optimizers are supported.")
 
-    gd_info, adam_info = make_standard_method_exp(function=function,
-                                                  x0 = x0,
-                                                  max_iterations=env_config["env_kwargs"]["max_iterations"],)
+    method_name = "Gradient Descent" if method == "GD" else "ADAM"
+    gd_info = make_standard_method_exp(function=function,
+                                        x0 = x0,
+                                        max_iterations=env_config["env_kwargs"]["max_iterations"],
+                                        name=method)
     
     gd_it, gd_val = zip(*[(item['iteration'], item['function_value']) for item in gd_info])
-    adam_it, adam_val = zip(*[(item['iteration'], item['function_value']) for item in adam_info])
-    rl_gd_it, rl_gd_val = zip(*[(item[0]['iteration'], item[0]['loss']) for item in rl_gd_info[:-2]])
 
-    return {
-        "Gradient Descent" : (gd_it, gd_val),
-        "ADAM" : (adam_it, adam_val),
-        "GD with adaptive LR" : (rl_gd_it, rl_gd_val)
-    }
+    
+    return {method_name : (gd_it, gd_val)}
+
+def optimize_exp_rl(method, env_config = None, model_dir = None):
+    if env_config is None or model_dir is None:
+        raise ValueError("When using the RL model, all attributes must be specified.")
+    
+    method_name = method
+    gd_info, function, x0 = make_rl_method_exp(env_config, model_dir)
+    gd_it, gd_val = zip(*[(item[0]['iteration'], item[0]['loss']) for item in gd_info[:-2]])
+
+    return {method_name : (gd_it, gd_val)}, x0, function
 
 def make_rl_method_exp(env_config, model_dir) -> tuple[list, object, np.array]: 
     env = make_vec_env(
@@ -93,14 +103,17 @@ def make_rl_method_exp(env_config, model_dir) -> tuple[list, object, np.array]:
 
     return opt_info, function, x0 
 
-def make_standard_method_exp(function, x0, max_iterations) -> tuple[list, list]:
+def make_standard_method_exp(function, x0, max_iterations, name = "GD") -> list:
     gd_info = []
-    adam_info = []
 
-    gradient_descent_optimizer(function, x0=x0, opt_info=gd_info, max_iteration_count = max_iterations)
-    adam_optimizer(function, x0=x0, opt_info=adam_info, max_iteration_count= max_iterations)
+    if name == "GD":
+        gradient_descent_optimizer(function, x0=x0, opt_info=gd_info, max_iteration_count = max_iterations)
+    elif name == "ADAM":
+        adam_optimizer(function, x0=x0, opt_info=gd_info, max_iteration_count= max_iterations)
+    else:
+        raise ValueError("Only ADAM and GD optimizers are supported.")
 
-    return gd_info, adam_info
+    return gd_info
 
 def plot_converging_comparasion(result : dict, dim : int, title = "_blank_name_"):
     plt.figure(figsize=(10, 6))
@@ -128,16 +141,20 @@ def plot_comparasion_table(result : dict):
 
     return df
 
-def plot_iterations_distribution(sample_count, env_config, model_dir):
+def plot_iterations_distribution_vs_standart(sample_count, env_config, model_dir):
     data = {}
 
-    rng = np.random.default_rng(env_config["seed"])
+    rng = get_rng(env_config["seed"], location_name="plot_iterations_distribution_vs_standart_function")
 
     for i in range(sample_count):
         sub_seed = int(rng.integers(low=0, high=np.iinfo(np.uint32).max))
         env_config["seed"] = sub_seed
 
-        result = optimize_exp(env_config, model_dir)
+        result_rl, x0, function = optimize_exp_rl(method=f"Adaptive LR (dim={env_config["env_kwargs"]["in_features"]})", env_config=env_config, model_dir=model_dir)
+        result_gdesc = optimize_exp_standart(method="GD", x0=x0, function=function, env_config=env_config)
+        result_adam = optimize_exp_standart(method="ADAM", x0=x0, function=function, env_config=env_config)
+
+        result = result_rl | result_gdesc | result_adam
 
         if i == 0:
             for name, values in result.items():
