@@ -123,10 +123,11 @@ def plot_converging_comparasion(result : dict, dim : int, title = "_blank_name_"
         sns.lineplot(x=values[0], y=values[1], label=name)
 
     plt.title(title)
-    plt.xlabel('Iteration')
-    plt.ylabel('Loss')
+    plt.xlabel('Iteration (log)')
+    plt.ylabel('Loss (log)')
     plt.legend()    
     plt.yscale('log')
+    plt.xscale('log')
     plt.show()
 
 def plot_comparasion_table(result : dict):
@@ -155,6 +156,43 @@ def plot_iterations_distribution_vs_standart(sample_count, env_config, model_dir
         result_adam = optimize_exp_standart(method="ADAM", x0=x0, function=function, env_config=env_config)
 
         result = result_rl | result_gdesc | result_adam
+
+        if i == 0:
+            for name, values in result.items():
+                data.setdefault(name, [len(values[0])])
+            continue
+        
+        for name, values in result.items():
+            data[name].append(len(values[0]))
+
+    stats = pd.DataFrame({
+        algo: {
+            'mean': np.mean(vals),
+            'variance': np.var(vals),
+            'std': np.std(vals),
+            'min': np.min(vals),
+            'max': np.max(vals),
+            'range': np.ptp(vals)
+        }
+        for algo, vals in data.items()
+    }).T.round(2)
+
+    return stats
+
+def plot_iterations_distribution(sample_count, env_config, models):
+    data = {}
+
+    rng = get_rng(env_config["seed"], location_name="plot_iterations_distribution_vs_standart_function")
+
+    for i in range(sample_count):
+        sub_seed = int(rng.integers(low=0, high=np.iinfo(np.uint32).max))
+        env_config["seed"] = sub_seed
+
+        result = {}
+
+        for model_name, model_dir in models.items():
+            result_rl, x0, function = optimize_exp_rl(method=model_name, env_config=env_config, model_dir=model_dir)
+            result = result | result_rl
 
         if i == 0:
             for name, values in result.items():

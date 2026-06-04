@@ -47,6 +47,7 @@ class ConvexOptimizationV1(gym.Env):
         render_mode: Only accept "ansi" and None type
         in_features (int, None): dimension of optimization task (None means optimizer will be learned on task with random dimension)
         max_iterations (int): maximum number of iterations
+        scale (float): function scale parameter 
         add_time_penalty (bool) : adds a time penalty to the reward function
     """
 
@@ -56,12 +57,14 @@ class ConvexOptimizationV1(gym.Env):
                  render_mode = None, 
                  in_features : int = None, 
                  max_iterations : int = 1000,
-                 add_time_penalty : bool = False):
+                 scale = None, 
+                 add_time_penalty : bool = False,):
         self.render_mode = render_mode
 
         self._in_features_global = in_features
         self._tol = 0.001
         self._max_iterations = max_iterations
+        self._scale = scale
         self._add_time_penalty = add_time_penalty
 
         # Convex positive-semidefinite function f(x) for optimization 
@@ -89,7 +92,8 @@ class ConvexOptimizationV1(gym.Env):
 
         self._iteration = 0
 
-        self._function = ConvexFunction(in_features=self._in_features, 
+        self._function = ConvexFunction(in_features=self._in_features,
+                                        scale=self._scale, 
                                         seed=self._obj_seed)
         
         self._init_values()
