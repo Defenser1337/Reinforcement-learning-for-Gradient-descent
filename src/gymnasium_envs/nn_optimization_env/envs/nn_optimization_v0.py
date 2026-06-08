@@ -11,9 +11,9 @@ import torch.nn as nn
 import torch
 
 from src.nn_models.lenet import LeNet
-from src.optimization.custom_lr_optimizer import CustomLR
+from src.gymnasium_envs.nn_optimization_env.envs.custom_lr_v0 import CustomLRV0
 
-class NeuralNetworkOptimization(gym.Env):
+class NeuralNetworkOptimizationV0(gym.Env):
     """
     Gymnasium custom environment: 
     https://gymnasium.farama.org/introduction/create_custom_env/
@@ -57,8 +57,9 @@ class NeuralNetworkOptimization(gym.Env):
 
         self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32)
 
+        # Dataset loading (done once at construction)
         if dataset_name is None:
-            raise ValueError("Missing dataset")
+            raise ValueError("Missing dataset_name")
         elif dataset_name == "MNIST":
             train_dataset = datasets.MNIST(root='./data', train=True, download=True)
             test_dataset = datasets.MNIST(root='./data', train=False, download=True)
@@ -69,14 +70,11 @@ class NeuralNetworkOptimization(gym.Env):
             X_test = test_dataset.data.unsqueeze(1).float() / 255.0
             y_test = test_dataset.targets.long()
         else:
-            raise ValueError("Incorrect dataset name.")
+            raise ValueError(f"Unknown dataset: {dataset_name}")
 
         self._train_ds = TensorDataset(X_train, y_train)
-        self._test_ds = TensorDataset(X_test, y_test)
-
-        test_loader = DataLoader(self._test_ds, batch_size=256, shuffle=True)
-
-        self._test_loader = test_loader
+        self._test_ds  = TensorDataset(X_test,  y_test)
+        self._test_loader = DataLoader(self._test_ds, batch_size=256, shuffle=False)
 
     def reset(self, seed: Optional[int] = None, options = None):
         super().reset(seed=seed)
@@ -100,7 +98,7 @@ class NeuralNetworkOptimization(gym.Env):
         else:
             raise ValueError("Incorrect dataset name.")
 
-        self._optimizer = CustomLR(self._model.parameters())
+        self._optimizer = CustomLRV0(self._model.parameters())
         self._optimizer.zero_grad()
 
         self._prev_loss = self._compute_gradients()

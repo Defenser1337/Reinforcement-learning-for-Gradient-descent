@@ -2,6 +2,7 @@ import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
 from typing import Optional
+
 from src.optimization.optimization_functions.convex_function import ConvexFunction
 from src.optimization.optimization_functions.convex_function_w_noise import ConvexFunctionWithNoise
 from src.optimization.optimization_functions.convex_function import (
@@ -10,10 +11,12 @@ from src.optimization.optimization_functions.convex_function import (
     IN_FEATURES_LOWER_BOUND, # 1
     IN_FEATURES_UPPER_BOUND # 100
 )
+
 from src.utils.prng import get_rng
 
 EPS = 1e-8
 ALPHA = 0.01
+TOL = 0.001
 
 class ConvexOptimizationV1(gym.Env):
     """
@@ -41,14 +44,17 @@ class ConvexOptimizationV1(gym.Env):
             Previous action
 
     Action value:
-        lr: normalized learning rate in logarithmic scale in the bound [-1, 1]
+        lr: normalized learning rate in logarithmic scale in [-1, 1]
         
     Parameters:
-        render_mode: Only accept "ansi" and None type
-        in_features (int, None): dimension of optimization task (None means optimizer will be learned on task with random dimension)
-        max_iterations (int): maximum number of iterations
-        scale (float): function scale parameter 
+        render_mode : Only accept "ansi" and None type
+        in_features (int, None) : dimension of optimization task (None means optimizer will be learned on task with random dimension)
+        max_iterations (int) : maximum number of iterations
+        scale (float) : function scale parameter 
+        add_noise (bool) : adds noise to optimization function
         add_time_penalty (bool) : adds a time penalty to the reward function
+        amplitude (float) : amplitude of the noise (only if add_noise is True)
+        frequency (float) : frequency of the noise (only if add_noise is True)
     """
 
     metadata = {"render_modes": ["ansi"]}
@@ -58,14 +64,19 @@ class ConvexOptimizationV1(gym.Env):
                  in_features : int = None, 
                  max_iterations : int = 1000,
                  scale = None, 
-                 add_time_penalty : bool = False,):
+                 add_noise = False,
+                 add_time_penalty : bool = False,
+                 amplitude = None,
+                 frequency = None):
         self.render_mode = render_mode
 
         self._in_features_global = in_features
-        self._tol = 0.001
         self._max_iterations = max_iterations
         self._scale = scale
+        self._add_noise = add_noise
         self._add_time_penalty = add_time_penalty
+        self._amplitude = amplitude
+        self._frequency = frequency
 
         # Convex positive-semidefinite function f(x) for optimization 
         self._function = None
@@ -92,9 +103,18 @@ class ConvexOptimizationV1(gym.Env):
 
         self._iteration = 0
 
-        self._function = ConvexFunction(in_features=self._in_features,
-                                        scale=self._scale, 
-                                        seed=self._obj_seed)
+        if self._add_noise is True:
+            self._function = ConvexFunction(in_features=self._in_features,
+                                            scale=self._scale, 
+                                            seed=self._obj_seed)
+        else:
+            self._function = ConvexFunctionWithNoise(in_features=self._in_features,
+                                                     scale=self._scale, 
+                                                     amplitude=self._amplitude,
+                                                     frequency=self._frequency,
+                                                     seed=self._obj_seed)
+
+        
         
         self._init_values()
 
@@ -126,14 +146,15 @@ class ConvexOptimizationV1(gym.Env):
             reward -= 0.1 * time_penalty
 
         diverged   = bool(self._is_exploding)
-        converged  = bool(self._curr_grad_norm < self._tol)
+        converged  = bool(self._curr_grad_norm < TOL)
         truncated  = bool(self._iteration >= self._max_iterations)
 
         if diverged:
             reward += -10.0
             terminated = True
             info["status"] = "diverged"
-        elif converged:
+        elif converged and self._add_noise is False:
+
             reward += 10.0
             terminated = True
             info["status"] = "converged"
@@ -311,13 +332,10 @@ class ConvexOptimizationV1(gym.Env):
     def _calculate_cos_sim(self):
         if self._prev_grad is None or self._prev_grad.shape != self._curr_grad.shape:
             return 0.0
-
         if not np.all(np.isfinite(self._curr_grad)):
             return 0.0
-
         if not np.all(np.isfinite(self._prev_grad)):
             return 0.0
-
         if self._curr_grad_norm <= 1e-12 or self._prev_grad_norm <= 1e-12:
             return 0.0
         

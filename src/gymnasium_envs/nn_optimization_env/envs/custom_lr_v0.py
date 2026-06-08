@@ -3,7 +3,7 @@ from torch.optim import Optimizer
 import numpy as np
 import math
 
-class CustomLR(Optimizer):
+class CustomLRV0(Optimizer):
     def __init__(self, params, lr=0.01):
         defaults = dict(lr=lr)
         super().__init__(params, defaults)
@@ -190,3 +190,5 @@ class CustomLR(Optimizer):
         loss_log = np.log1p(self._curr_loss)
 
         return loss_log
+    
+    import torch
