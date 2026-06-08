@@ -15,6 +15,11 @@ from src.gymnasium_envs.nn_optimization_env.envs.custom_lr_v1 import CustomLRV1
 
 EPS = 1e-8
 
+BETA1_LOWER_BOUND = 0.5
+BETA1_UPPER_BOUND = 0.999
+BETA2_LOWER_BOUND = 0.9
+BETA2_UPPER_BOUND = 0.9999
+
 class NeuralNetworkOptimizationV1(gym.Env):
     """
     Represents neural network optimization task process.
@@ -60,24 +65,36 @@ class NeuralNetworkOptimizationV1(gym.Env):
         dataset_name: Optional[str] = None,
         max_iterations: int = 3000,
         batch_size: int = 256,
+        learn_betas: bool = False,
         add_time_penalty: bool = False,
     ):
         self.render_mode = render_mode
         self.dataset_name = dataset_name
         self._max_iterations = max_iterations
         self._batch_size = batch_size
+        self._learn_betas = learn_betas
         self._add_time_penalty = add_time_penalty
 
-        self.observation_space = spaces.Dict({
+        obs = {
             "grad_norm_scaled_log":       spaces.Box(low=0.0,    high=100.0, shape=(1,), dtype=np.float32),
             "grad_delta_norm_scaled_log": spaces.Box(low=0.0,    high=100.0, shape=(1,), dtype=np.float32),
             "cos_sim":                    spaces.Box(low=-1.0,   high=1.0,   shape=(1,), dtype=np.float32),
             "loss_scaled_log":            spaces.Box(low=0.0,    high=100.0, shape=(1,), dtype=np.float32),
             "loss_delta_scaled_log":      spaces.Box(low=-100.0, high=100.0, shape=(1,), dtype=np.float32),
-            "prev_action":                spaces.Box(low=-1.0,   high=1.0,   shape=(1,), dtype=np.float32),
-        })
+            "prev_lr":                    spaces.Box(low=-1.0,   high=1.0,   shape=(1,), dtype=np.float32),
+        }
 
-        self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32)
+        if self._learn_betas is True:
+            obs["prev_beta1"] = spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32)
+            obs["prev_beta2"] = spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32)
+
+        self.observation_space = spaces.Dict(obs)
+
+        if self._learn_betas is True:
+            self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(3,), dtype=np.float32)
+        else:
+            self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32)
+        
 
         # Dataset loading (done once at construction)
         if dataset_name is None:
@@ -106,43 +123,66 @@ class NeuralNetworkOptimizationV1(gym.Env):
         if seed is not None:
             g.manual_seed(seed)
 
-        train_loader       = DataLoader(self._train_ds, batch_size=self._batch_size, shuffle=True, generator=g)
+        train_loader  = DataLoader(self._train_ds, batch_size=self._batch_size, shuffle=True, generator=g)
         self._train_loader = itertools.cycle(train_loader)
 
-        self._iteration   = 0
-        self._prev_action = 0.0
-        self._device      = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self._iteration = 0
+
+        self._prev_beta1 = 0.0
+        self._prev_beta2 = 0.0
+        self._prev_lr = 0.0
+
+        self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         if self.dataset_name == "MNIST":
-            self._model     = LeNet(seed=seed).to(self._device)
+            self._model = LeNet(seed=seed).to(self._device)
             self._criterion = nn.CrossEntropyLoss()
         else:
             raise ValueError(f"Unknown dataset: {self.dataset_name}")
 
-        self._optimizer = CustomLRV1(self._model.parameters())
+        self._optimizer = CustomLRV1(self._model.parameters(), learn_betas=self._learn_betas)
         self._optimizer.zero_grad()
 
         # First forward-backward pass to populate gradients
         self._curr_loss = self._compute_gradients()
 
-        observation = self._optimizer.get_obs(loss=self._curr_loss, prev_action=self._prev_action)
-        info        = self._optimizer.get_info(self._iteration)
+        observation = self._optimizer.get_obs(loss=self._curr_loss, 
+                                              prev_lr=self._prev_lr, 
+                                              prev_beta1=self._prev_beta1, 
+                                              prev_beta2=self._prev_beta2)
+        info = self._optimizer.get_info(self._iteration)
 
         return observation, info
 
     def step(self, action: np.ndarray):
         self._iteration += 1
 
-        lr = 10 ** (action[0] * 3 - 2)
-        self._prev_action = float(action[0])
+        if self._learn_betas is True:
+            lr = 10 ** (action[0] * 3 - 2) # -> [0.00001, 10]
+            beta1 = 0.5 + 0.499 * (action[1] + 1) / 2   # -> [0.5, 0.999]
+            beta2 = 0.9 + 0.0999 * (action[2] + 1) / 2  # -> [0.9, 0.9999]
 
-        self._optimizer.step(lr=lr)
+            self._prev_lr = float(action[0])
+            self._prev_beta1 = float(action[1])
+            self._prev_beta2 = float(action[2])
 
-        prev_loss       = self._curr_loss
+            self._optimizer.step(lr=lr, beta1=beta1, beta2=beta2)
+        else:
+            lr = 10 ** (action[0] * 3 - 2)# -> [0.00001, 10]
+
+            self._prev_lr = float(action[0])
+
+            self._optimizer.step(lr=lr)
+
+
+        prev_loss = self._curr_loss
         self._curr_loss = self._compute_gradients()
 
-        observation = self._optimizer.get_obs(loss=self._curr_loss, prev_action=self._prev_action)
-        info        = self._optimizer.get_info(self._iteration)
+        observation = self._optimizer.get_obs(loss=self._curr_loss, 
+                                              prev_lr=self._prev_lr, 
+                                              prev_beta1=self._prev_beta1, 
+                                              prev_beta2=self._prev_beta2)
+        info = self._optimizer.get_info(self._iteration)
 
         reward = float(np.log2(prev_loss + EPS) - np.log2(self._curr_loss + EPS))
         reward = np.clip(reward, -5.0, 5.0)
@@ -151,7 +191,7 @@ class NeuralNetworkOptimizationV1(gym.Env):
             time_penalty = self._iteration / self._max_iterations
             reward -= 0.1 * time_penalty
 
-        diverged  = self._optimizer.is_diverged()
+        diverged = self._optimizer.is_diverged()
         truncated = bool(self._iteration >= self._max_iterations)
 
         if diverged:

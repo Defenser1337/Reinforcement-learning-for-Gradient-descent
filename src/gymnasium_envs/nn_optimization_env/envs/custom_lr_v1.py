@@ -1,15 +1,16 @@
 import torch
-from torch.optim import Optimizer
+from torch.optim import Adam
 import numpy as np
 import math
 
 EPS   = 1e-8
 ALPHA = 0.01
 
-class CustomLRV1(Optimizer):
-    def __init__(self, params, lr=0.01):
-        defaults = dict(lr=lr)
-        super().__init__(params, defaults)
+class CustomLRV1(Adam):
+    def __init__(self, params, lr=0.01, betas = (0.9, 0.999), learn_betas = False):
+        super().__init__(params, lr=lr, betas=betas, eps=EPS)
+
+        self._learn_betas = learn_betas
 
         # gradient state 
         self._prev_grad        = None
@@ -23,7 +24,7 @@ class CustomLRV1(Optimizer):
         self._curr_loss        = None
         self._prev_loss        = None
 
-        #  EMA state 
+        # EMA state 
         self._ema_grad_norm        = None   # initialised on first call
         self._ema_grad_delta_norm  = EPS
         self._ema_loss             = None   # initialised on first call
@@ -34,27 +35,31 @@ class CustomLRV1(Optimizer):
         self._curr_loss_delta      = 0.0
 
         # misc 
-        self._prev_action      = 0.0
+        self._prev_lr = 0.0
+
+        if learn_betas is True:
+            self._prev_beta1 = 0.9
+            self._prev_beta2 = 0.999
 
     @torch.no_grad()
-    def step(self, closure=None, lr=None):
-        if closure is not None:
-            with torch.enable_grad():
-                closure()
+    def step(self, closure=None, lr=None, beta1=None, beta2=None):
+        if lr is not None:
+            for group in self.param_groups:
+                group['lr'] = lr
+        
+        if self._learn_betas and beta1 is not None and beta2 is not None:
+            for group in self.param_groups:
+                group['betas'] = (beta1, beta2)
 
-        for group in self.param_groups:
-            effective_lr = lr if lr is not None else group["lr"]
-            for p in group["params"]:
-                if p.grad is None:
-                    continue
-                p.add_(p.grad, alpha=-effective_lr)
+        super().step(closure)
+        
 
     @torch.no_grad()
-    def get_obs(self, loss: float, prev_action: float = 0.0):
+    def get_obs(self, loss: float, prev_lr: float = 0.0, prev_beta1 : float = 0.9, prev_beta2 : float = 0.999):
         flat_grad = self._collect_flat_grad()
 
         if flat_grad is None:
-            return self._zero_obs(prev_action)
+            return self._zero_obs(prev_lr, prev_beta1, prev_beta2)
 
         self._update_state(flat_grad, loss)
 
@@ -79,16 +84,22 @@ class CustomLRV1(Optimizer):
             abs_delta / (self._ema_loss_delta + EPS)
         ))
 
-        self._prev_action = prev_action
-
-        return {
+        obs = {
             "grad_norm_scaled_log":       np.array([grad_norm_scaled_log],       dtype=np.float32),
             "grad_delta_norm_scaled_log": np.array([grad_delta_norm_scaled_log], dtype=np.float32),
             "cos_sim":                    np.array([cos_sim],                    dtype=np.float32),
             "loss_scaled_log":            np.array([loss_scaled_log],            dtype=np.float32),
             "loss_delta_scaled_log":      np.array([loss_delta_scaled_log],      dtype=np.float32),
-            "prev_action":                np.array([self._prev_action],          dtype=np.float32),
+            "prev_lr":                    np.array([prev_lr],          dtype=np.float32),
         }
+
+        if self._learn_betas is True:
+            obs["prev_beta1"] = np.array([prev_beta1], dtype=np.float32)
+            obs["prev_beta2"] = np.array([prev_beta2], dtype=np.float32)
+        
+        return obs
+
+
 
     @torch.no_grad()
     def get_info(self, iteration: int):
@@ -205,13 +216,20 @@ class CustomLRV1(Optimizer):
 
         return float(np.clip(cos_sim, -1.0, 1.0)) if math.isfinite(cos_sim) else 0.0
 
-    def _zero_obs(self, prev_action: float) -> dict:
+    def _zero_obs(self, prev_lr: float, prev_beta1 : float, prev_beta2 : float) -> dict:
         zero = np.array([0.0], dtype=np.float32)
-        return {
+
+        obs = {
             "grad_norm_scaled_log":       zero.copy(),
             "grad_delta_norm_scaled_log": zero.copy(),
             "cos_sim":                    zero.copy(),
             "loss_scaled_log":            zero.copy(),
             "loss_delta_scaled_log":      zero.copy(),
-            "prev_action":                np.array([prev_action], dtype=np.float32),
+            "prev_lr":                    np.array([prev_lr], dtype=np.float32)
         }
+        
+        if self._learn_betas is True:
+            obs["prev_beta1"] = np.array([prev_beta1], dtype=np.float32)
+            obs["prev_beta2"] = np.array([prev_beta2], dtype=np.float32)
+
+        return obs
