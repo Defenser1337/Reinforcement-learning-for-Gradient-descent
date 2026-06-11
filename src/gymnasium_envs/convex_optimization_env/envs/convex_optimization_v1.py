@@ -104,15 +104,15 @@ class ConvexOptimizationV1(gym.Env):
         self._iteration = 0
 
         if self._add_noise is True:
-            self._function = ConvexFunction(in_features=self._in_features,
-                                            scale=self._scale, 
-                                            seed=self._obj_seed)
-        else:
             self._function = ConvexFunctionWithNoise(in_features=self._in_features,
                                                      scale=self._scale, 
                                                      amplitude=self._amplitude,
                                                      frequency=self._frequency,
                                                      seed=self._obj_seed)
+        else:
+            self._function = ConvexFunction(in_features=self._in_features,
+                                            scale=self._scale, 
+                                            seed=self._obj_seed)
 
         
         
