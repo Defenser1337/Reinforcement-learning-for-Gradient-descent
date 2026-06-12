@@ -96,32 +96,30 @@ class ConvexOptimizationV1(gym.Env):
     def reset(self, seed: Optional[int] = None, options = None):
         super().reset(seed=seed)
 
-        rng = get_rng(seed=seed, location_name="convex_optimization_env_v1")
+        if seed is not None or self._function is None:
+            rng = get_rng(seed=seed, location_name="convex_optimization_env_v1")
+            self._obj_seed = rng.integers(low=0, high=2**31 - 1)
+            self._in_features = (
+                rng.integers(low=IN_FEATURES_LOWER_BOUND, high=IN_FEATURES_UPPER_BOUND)
+                if self._in_features_global is None else self._in_features_global
+            )
 
-        self._obj_seed = rng.integers(low=0, high=2**31 - 1)
-        self._in_features = rng.integers(low=IN_FEATURES_LOWER_BOUND, high=IN_FEATURES_UPPER_BOUND) if self._in_features_global is None else self._in_features_global
+            if self._add_noise is True:
+                self._function = ConvexFunctionWithNoise(
+                    in_features=self._in_features, scale=self._scale,
+                    amplitude=self._amplitude, frequency=self._frequency,
+                    seed=self._obj_seed
+                )
+            else:
+                self._function = ConvexFunction(
+                    in_features=self._in_features, scale=self._scale, seed=self._obj_seed
+                )
 
         self._iteration = 0
-
-        if self._add_noise is True:
-            self._function = ConvexFunctionWithNoise(in_features=self._in_features,
-                                                     scale=self._scale, 
-                                                     amplitude=self._amplitude,
-                                                     frequency=self._frequency,
-                                                     seed=self._obj_seed)
-        else:
-            self._function = ConvexFunction(in_features=self._in_features,
-                                            scale=self._scale, 
-                                            seed=self._obj_seed)
-
-        
-        
         self._init_values()
 
-        observation = self._get_obs()
-        info = self._get_info()
+        return self._get_obs(), self._get_info()
 
-        return observation, info
 
     def step(self, action : np.ndarray):
         self._iteration += 1
