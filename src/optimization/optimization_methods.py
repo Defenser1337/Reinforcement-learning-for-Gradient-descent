@@ -20,6 +20,7 @@ def gradient_descent_optimizer(function : Function,
                                lr : float = 0.001, 
                                tol : float = 0.001, 
                                max_iteration_count : int = 10000,
+                               add_noise : bool = False,
                                random_state : Optional[int] = None,
                                verbose : int = 0,
                                opt_info : Optional[List] = None) -> OptimizeResult:
@@ -110,7 +111,7 @@ def gradient_descent_optimizer(function : Function,
             status = 0
             break
 
-        if norm < tol:
+        if norm < tol and add_noise is False:
             iteration_count = i 
             status = 1
             break
@@ -157,6 +158,7 @@ def adam_optimizer(function : Function,
                     lr : float = 0.001, 
                     tol : float = 0.001, 
                     max_iteration_count : int = 10000,
+                    add_noise : bool = False,
                     beta1 : float = 0.99,
                     beta2 : float = 0.999,
                     eps : float = 1e-8,
@@ -266,7 +268,7 @@ def adam_optimizer(function : Function,
             status = 0
             break
 
-        if norm < tol:
+        if norm < tol and add_noise is False:
             iteration_count = i 
             status = 1
             break
